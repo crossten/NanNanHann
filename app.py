@@ -78,11 +78,6 @@ def reply(event):
     global game_key, join_list
     msg = event.message.text
     profile_user = line_bot_api.get_profile(event.source.user_id) 
-    if re.search('加入清單', msg):
-        text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
-        for i, j in zip(join_list.keys(), join_list.values()):
-            text += '{uid},{name}\n'.format(uid= i, name= j)
-        TextMsg(event, text)
     if re.search('加入王國', msg):
         text = event.source.user_id \
             + '\n' \
