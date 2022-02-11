@@ -4,13 +4,14 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, PostbackEvent, FollowEvent,
-    TextMessage, TextSendMessage, FlexSendMessage)
-app = Flask(__name__)
+    TextMessage, TextSendMessage, FlexSendMessage
+    )
 #追加功能相關Package
 import re
 import json
 import random
 import os
+import pandas as pd
 
 # 必須放上自己的Channel Access Token、Channel Secret
 channel_access_token = 'channel_access_token'
@@ -20,23 +21,28 @@ channel_secret = 'channel_secret'
 app = Flask(__name__)
 line_bot_api = LineBotApi(channel_access_token)
 handler = WebhookHandler(channel_secret)
+member = pd.read_csv('member.csv', header= 0, index_col= None)
 game_key = {}
 join_list = {}
 
 #常用模組
+#推播訊息
+def PushMsg(uid, text): 
+    line_bot_api.push_message(to= uid, messages= TextSendMessage(text= text))
+def MultMsg(uid, text): 
+    line_bot_api.multicast(to= uid,messages= TextSendMessage(text= text))
+def MultFlexMsg(uid, text, flex): 
+    line_bot_api.multicast(to= uid,
+            messages=FlexSendMessage(alt_text= text, contents= json.loads(json.dumps(flex, ensure_ascii=False))
+        )
 #文字訊息
 def TextMsg(event, text): 
     line_bot_api.reply_message(
             event.reply_token,
             TextMessage(text= text)
         )
-#推播訊息
-def PushMsg(uid, text): 
-    line_bot_api.push_message(to= uid, messages= TextSendMessage(text= text))
-def MultMsg(uid, text): 
-    line_bot_api.multicast(to= uid,messages= TextSendMessage(text= text))
 #客製化訊息
-def FlexMsg(event,text, flex): 
+def FlexMsg(event, text, flex): 
     line_bot_api.reply_message(
         event.reply_token,                    
         messages=FlexSendMessage(
@@ -97,8 +103,7 @@ def reply(event):
               for i in range(0,6):           
                   room += str(random.randint(0,9))
               while room in game_key.keys() :
-                  room += str(random.randint(0,9))
-             
+                  room += str(random.randint(0,9))            
               game_key[room] = {
                             'game_list' : {},
                             'game_draw' : [],
@@ -106,7 +111,6 @@ def reply(event):
                             'game_max' : game_split[2], 
                             'game_pool' : game_split[1]
                             }
-              game = {}
               game = {                    
                   'type': 'bubble',
                   'size' : 'giga',
@@ -210,6 +214,7 @@ def reply(event):
               game['body']['contents'].append(tittle)
               game['body']['contents'].append(separator)
               game['body']['contents'].append(exp)
+              MultFlexMsg(list(member['LINE_UID']), '抽獎編號' + room, game)
               FlexMsg(event, '抽獎編號' + room, game)
               return
         elif game_split[1] in game_key.keys() :
