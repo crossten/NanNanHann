@@ -57,9 +57,11 @@ def callback():
     return 'OK'
 
 #啟動訊息，管理員帳號
+"""
 admin_id = ['LINE_UID']
 for i in admin_id:
     PushMsg(i, '你可以開始了')
+"""
    
 #加好友回報ID
 @handler.add(FollowEvent)
