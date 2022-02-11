@@ -1,22 +1,24 @@
 #linebot相關Package
-from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, PostbackEvent, FollowEvent, UnsendEvent,
     TextMessage, TextSendMessage, FlexSendMessage
     )
+from flask import Flask, request, abort
 #追加功能相關Package
-import re
-import json
 import random
+import json
 import os
+import re
 import pandas as pd
 import numpy as np
 
 # 必須放上自己的Channel Access Token、Channel Secret
-channel_access_token = 'channel_access_token/309eywJlhx1vaCRQ9u5O7AaTNiT+jZkyQhkcu3nUY57K3G2piDsT2bEyuBvMw2NFjW8oW2NmzxFmRPkHVM57ZwdB04t89/1O/w1cDnyilFU='
+channel_access_token = 'channel_access_token'
 channel_secret = 'channel_secret'
+#管理員帳號
+admin_id = ['admin_id', '']
 
 #常用定義/功能
 app = Flask(__name__)
@@ -68,8 +70,7 @@ def callback():
         abort(400)
     return 'OK'
 
-#啟動訊息，管理員帳號
-admin_id = ['U5aa112088f939870dee63265f2b0b76f']
+#啟動訊息
 for i in admin_id:
     PushMsg(i, '你可以開始了')
    
@@ -257,6 +258,9 @@ def reply(event):
               game['body']['contents'].append(tittle)
               game['body']['contents'].append(separator)
               game['body']['contents'].append(exp)
+              if game_split[1] == '測試':
+                FlexMsg(event, '抽獎編號' + room, game)
+                return
               MultFlexMsg(list(member['LINE_UID']), '抽獎編號' + room, game)
               FlexMsg(event, '抽獎編號' + room, game)
               return
@@ -274,19 +278,19 @@ def reply(event):
 def Postback_game(event):
     global game_key
     val = event.postback.data
-    profile_user = line_bot_api.get_profile(event.source.user_id) 
+    game_name = member['GAME_NAME'][member['LINE_UID'] == event.source.user_id].iloc[0]
     if re.search('抽獎編號', val):
         ordr = val.split('-')[1]
         room = val.split('-')[2]
         if room not in game_key.keys():
             return
         if ordr == '參加':
-            game_key[room]['game_list'][event.source.user_id] = profile_user.display_name
-            TextMsg(event, profile_user.display_name +'----抽獎編號{room}--報名成功'.format(room = room))
+            game_key[room]['game_list'][event.source.user_id] = game_name
+            TextMsg(event, game_name +'----抽獎編號{room}--報名成功'.format(room = room))
             return
         elif ordr == '取消':
             del game_key[room]['game_list'][event.source.user_id]
-            TextMsg(event, profile_user.display_name +'----抽獎編號{room}--刪除成功'.format(room = room))
+            TextMsg(event, game_name +'----抽獎編號{room}--刪除成功'.format(room = room))
             return
         elif ordr == '名單':
             game_list = '\n'.join(game_key[room]['game_list'].values())
@@ -310,15 +314,14 @@ def Postback_game(event):
                 for num, i in enumerate(r):
                     name = game_key[room]['game_list'][i]
                     game_key[room]['game_draw'].append(name) 
-                    if len(i) == 33 :
-                        try :
-                            text= game_key[room]['game_pool'] \
-                                +'----抽獎編號 : ' \
-                                + room \
-                                + '\n恭喜 {name} 中獎----請投標由左到右數來第{num}個'.format(num = str(num+1), name = name)
-                            PushMsg(event, i, text)                       
-                        except :
-                            print('#error_uid')                            
+                    try :
+                        text= game_key[room]['game_pool'] \
+                            +'----抽獎編號 : ' \
+                            + room \
+                            + '\n恭喜 {name} 中獎----請投標由左到右數來第{num}個'.format(num = str(num+1), name = name)
+                        PushMsg(i, text)                       
+                    except :
+                        print('#error_uid')                            
             game_list = '\n'.join(game_key[room]['game_draw'])
             text = game_key[room]['game_pool'] \
                  + '----' \
