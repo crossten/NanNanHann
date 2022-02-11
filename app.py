@@ -3,7 +3,7 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-    MessageEvent, PostbackEvent, FollowEvent,
+    MessageEvent, PostbackEvent, FollowEvent, UnsendEvent,
     TextMessage, TextSendMessage, FlexSendMessage
     )
 #追加功能相關Package
@@ -12,9 +12,10 @@ import json
 import random
 import os
 import pandas as pd
+import numpy as np
 
 # 必須放上自己的Channel Access Token、Channel Secret
-channel_access_token = 'channel_access_token'
+channel_access_token = 'channel_access_token/309eywJlhx1vaCRQ9u5O7AaTNiT+jZkyQhkcu3nUY57K3G2piDsT2bEyuBvMw2NFjW8oW2NmzxFmRPkHVM57ZwdB04t89/1O/w1cDnyilFU='
 channel_secret = 'channel_secret'
 
 #常用定義/功能
@@ -22,8 +23,12 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(channel_access_token)
 handler = WebhookHandler(channel_secret)
 member = pd.read_csv('member.csv', header= 0, index_col= None)
+member['GAME_NAME'] = member['GAME_NAME'].fillna(',')+ ','+ member['LINE_NAME'] 
+member['GAME_NAME']  = member['GAME_NAME'].str.split(',', expand=True)[0]
+MsgLog = pd.DataFrame(columns = ['user_id', 'display_name', 'message_id', 'msg'])
 game_key = {}
 join_list = {}
+Unsend_list = {}
 
 #常用模組
 #推播訊息
@@ -35,6 +40,7 @@ def MultFlexMsg(uid, text, flex):
     line_bot_api.multicast(to= uid,
             messages=FlexSendMessage(alt_text= text, contents= json.loads(json.dumps(flex, ensure_ascii=False))
         )
+    )
 #文字訊息
 def TextMsg(event, text): 
     line_bot_api.reply_message(
@@ -63,11 +69,9 @@ def callback():
     return 'OK'
 
 #啟動訊息，管理員帳號
-"""
-admin_id = ['LINE_UID']
+admin_id = ['U5aa112088f939870dee63265f2b0b76f']
 for i in admin_id:
     PushMsg(i, '你可以開始了')
-"""
    
 #加好友回報ID
 @handler.add(FollowEvent)
@@ -77,13 +81,52 @@ def handle_join(event):
     join_list[event.source.user_id] = profile_user.display_name
     TextMsg(event, '週週抽獎抽不完~ 請輸入遊戲名字~ \n例如 : 白涵公主,加入王國')
     return
-
+#收回訊息紀錄
+@handler.add(UnsendEvent)
+def Unsend_dict(event):
+    global MsgLog, Unsend_list
+    MsgLog['message_id'] = MsgLog['message_id'].fillna(0).astype(np.int64).astype('str')
+    profile_user = event.source.user_id
+    message_id = event.unsend.message_id
+    display_name = MsgLog['display_name'][(MsgLog['user_id'] == profile_user) & (MsgLog['message_id'] == message_id)].iloc[-1]
+    game_name = member['GAME_NAME'][member['LINE_UID'] == profile_user].iloc[0]
+    Unsend_msg = MsgLog['msg'][(MsgLog['user_id'] == profile_user) & (MsgLog['message_id'] == message_id)].iloc[-1]
+    try:
+        Unsend_list[profile_user][message_id] = ["{display}({game})".format(display= display_name,game = game_name), Unsend_msg]
+    except:
+        Unsend_list[profile_user] = {}
+        Unsend_list[profile_user][message_id] = ["{display}({game})".format(display= display_name,game = game_name), Unsend_msg]
+    return 
 #訊息傳遞區塊
 @handler.add(MessageEvent, message=TextMessage)
 def reply(event):
-    global game_key, join_list
+    global game_key, join_list, MsgLog, Unsend_list
     msg = event.message.text
     profile_user = line_bot_api.get_profile(event.source.user_id) 
+    MsgLog = MsgLog.append(
+                {
+            'user_id': event.source.user_id, 
+            'message_id': event.message.id, 
+            'display_name': profile_user.display_name,
+            'msg': msg
+            }, 
+            ignore_index=True
+        )  
+    try:
+        log = list(Unsend_list[event.source.user_id].keys())[0]
+        text = Unsend_list[event.source.user_id][log][0] + ' 剛剛收回了 : ' \
+          +  Unsend_list[event.source.user_id][log][1]
+        del Unsend_list[event.source.user_id][log]
+        TextMsg(event, text)
+        return
+    except:
+        None
+    if re.search('加入清單', msg):
+        text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
+        for i, j in zip(join_list.keys(), join_list.values()):
+            text += '{uid},{name}\n'.format(uid= i, name= j)
+        TextMsg(event, text)
+        return
     if re.search('加入王國', msg):
         text = event.source.user_id \
             + '\n' \
