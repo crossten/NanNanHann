@@ -699,7 +699,7 @@ def reply(event):
         for elem in redis_model.connect.keys():
             redis_model.pop(elem)
         redis_model.insert('game_room', [])
-        redis_model.insert('personal', [])
+        redis_model.insert('personal', {})
         TextMsg(event, '資料庫清空完成')
         return
 
