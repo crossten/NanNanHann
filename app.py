@@ -665,7 +665,7 @@ def reply(event):
             redis_model.data = redis_model.reply('personal')
         data = pd.concat({k: pd.Series(v) for k, v in redis_model.data.items()}).reset_index()
         data.columns = ['LINE_UID', 'MsgType', 'Counts']
-        data = data.merge(member, how = 'left', on= 'LINE_UID')
+        data = data.merge(member, how = 'left', on= 'LINE_UID').fillna('未加入王國')
         flex.insert(data)
         FlexMsg(event, '排行榜', flex.flex_carousel)
         return
