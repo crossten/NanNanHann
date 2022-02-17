@@ -1,5 +1,9 @@
 line-bot-sdk
 flask
 pandas
-emoji
 regex
+numpy
+pyimgur
+fake_useragent
+requests
+redis
