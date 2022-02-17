@@ -114,11 +114,11 @@ def TextMsg(event, text):
 #客製化訊息
 def FlexMsg(event, text, flex): 
     line_bot_api.reply_message(
-        event.reply_token,                    
+        event.reply_token,
         messages=FlexSendMessage(
             alt_text= text,
             contents= json.loads(json.dumps(flex, ensure_ascii=False))
-          )
+            )
         )
 #圖片訊息
 def ImageMsg(event, URL):
@@ -143,14 +143,14 @@ class Lottery():
             '黑色染劑' : 'https://i.imgur.com/muXGlj9.jpg',
             '魔法書頁' : 'https://img.itw01.com/images/2019/04/10/14/1258_JPVi2W_UFJOBEH.jpg!r800x0.jpg',
             '逆轉' : 'https://resource01-proxy.ulifestyle.com.hk/res/v3/image/content/2300000/2301165/time02--_1024.jpg'
-            }      
+            }
     def flex(self, room, award, sizes):
         try :
             award_rex = re.search('|'.join(self.self.keys()), award).group(0)
             jpg = self.jpg[award_rex]
         except :
             jpg = 'https://i.imgur.com/IoPqQPZ.png'
-        game = {                    
+        game = {
             'type': 'bubble',
             'size' : 'giga',
             }
@@ -259,10 +259,10 @@ class Lottery():
 class game_rank():
     def __init__(self):
         self.Msgtype = {
-            'Image' : '圖片老司機',
+            'Msg' : '幹話王',
             'Sticker' : '貼圖王',
             'Unsend' : '訊息回收車',
-            'Msg' : '幹話王',
+            'Image' : '圖片老司機',
             'postback' : '狂點按鈕'
         }
         self.image = {
@@ -289,12 +289,12 @@ class game_rank():
             'align': 'center',
             'color': color,
             'size': 'sm',
-            'wrap': True,                        
+            'wrap': True,
             'adjustMode': 'shrink-to-fit'
         }
         return box
     def rank(self, group, data):
-        game = {                    
+        game = {
             'type': 'bubble',
             'size' : 'giga',
             }
@@ -323,13 +323,13 @@ class game_rank():
             'contents': []
             }
         row = self.rowbox(color = '#3C3C3C')
-        for i in ['LINE', '遊戲名稱', '累積次數']:            
+        for i in ['LINE', '遊戲名稱', '累積次數']:
             space = self.spacebox(text= i, color= '#FFFFFF')
             row['contents'].append(space)
         game['body']['contents'].append(row)
         for i in range(len(data)):
             row = self.rowbox(color = '#FCFCFC')
-            for j in ['LINE_NAME', 'GAME_NAME', 'Counts']:                
+            for j in ['LINE_NAME', 'GAME_NAME', 'Counts']:
                 space = self.spacebox(text= data.iloc[i][j], color= '#000000')
                 row['contents'].append(space)
         game['body']['contents'].append(row)
@@ -338,10 +338,9 @@ class game_rank():
         for i in self.Msgtype.keys():
             add = data[data['MsgType']== i]
             if len(add) == 0 : continue
-            add.reset_index(drop= True, inplace= True)
-            add['Counts'] = add['Counts'].astype('str')
+            add.sort_values(by=['Counts'],ascending = False).reset_index(drop=True)
             add = add.iloc[:10]
-            self.flex_carousel['contents'].append(self.rank(i, add))        
+            self.flex_carousel['contents'].append(self.rank(i, add))
 
 #百度搜圖
 def baidu(keyword):
@@ -386,7 +385,7 @@ def baidu(keyword):
         }
     response = requests.get(url= url, 
                             headers= {'User-Agent': UserAgent().random},
-                            params= param)  
+                            params= param)
     return response.text
 
 #抽幻獸介面
@@ -395,7 +394,7 @@ pet_data['Total'] = pet_data['Total'].str.replace('%', '').astype('float')/100
 pet_data = pet_data.sort_values(by=['Total']).reset_index(drop=True)
 class game_pet():
     def __init__(self) :
-        self.flex_carousel = {'contents':[],'type':'carousel'}        
+        self.flex_carousel = {'contents':[],'type':'carousel'}
         self.url = pet_new['Url'][0]
         self.theme = '抽幻獸 {name} 活動池'.format(name = pet_new['Name'][0])
     def menu(self):
@@ -422,7 +421,7 @@ class game_pet():
             'backgroundColor': '#fffdeb',
             'contents': []
                 }
-        button =  {
+        button = {
             'type': 'button',
             'action': {
                 'type': 'postback',
@@ -430,7 +429,7 @@ class game_pet():
                 'data': '抽幻獸1抽'}
                 }
         game['footer']['contents'].append(button)
-        button =  {
+        button = {
             'type': 'button',
             'action': {
                 'type': 'postback',
@@ -451,7 +450,7 @@ class game_pet():
             'type': 'box',
             'layout': 'vertical',
             'contents': []
-            }                        
+            }
         image = {
             'type': 'image',
             'url': pet_url,
@@ -501,7 +500,7 @@ def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
     try:
-        handler.handle(body, signature)        
+        handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
     return 'OK'
@@ -537,7 +536,7 @@ def Unsend_dict(event):
     profile_user = event.source.user_id
     message_id = event.unsend.message_id
     display_name = MsgLog['display_name'][(MsgLog['user_id'] == profile_user) & (MsgLog['message_id'] == message_id)].iloc[-1]
-    try:  
+    try:
         game_name = member['GAME_NAME'][member['LINE_UID'] == profile_user].iloc[0]
     except:
         game_name = '未加入王國'
@@ -548,7 +547,7 @@ def Unsend_dict(event):
 #訊息傳遞區塊
 @handler.add(MessageEvent, message=TextMessage)
 def reply(event):
-    global  join_list, MsgLog, Unsend_list
+    global join_list, MsgLog, Unsend_list
     msg = event.message.text
     redis_model = redis_db()
     try:
@@ -602,13 +601,13 @@ def reply(event):
         
     if re.search('抽獎', msg):
         game_split = msg.split(',')
-        redis_model.game_room = redis_model.reply('game_room')        
+        redis_model.game_room = redis_model.reply('game_room')
         if game_split[0] == '舉辦抽獎' :
               room = 'r'
               for i in range(0,6):           
                   room += str(random.randint(0,9))
               while room in redis_model.game_room:
-                  room += str(random.randint(0,9))            
+                  room += str(random.randint(0,9))
               redis_model.game_key = {
                             'game_list' : {},
                             'game_draw' : [],
@@ -624,11 +623,11 @@ def reply(event):
               return
         elif msg == '查看抽獎' :
               flex_carousel = {'contents':[],'type':'carousel'}
-              for num, i in enumerate(redis_model.reply('game_room')) :                  
-                  load_game  = redis_model.reply(i)
+              for num, i in enumerate(redis_model.reply('game_room')) :
+                  load_game = redis_model.reply(i)
                   game = Lottery()
                   flex_carousel['contents'].append(game.flex(room= i, award= load_game['game_pool'], sizes= load_game['game_max']))
-                  if num == 10: break                      
+                  if num == 10: break
               FlexMsg(event, '抽獎編號-mix', flex_carousel)
               return
         elif game_split[1] in redis_model.game_room:
@@ -730,8 +729,8 @@ def Postback_game(event):
             for j in probability :
                 if i > j :
                     pet_name.append(pet_data['Name'][num])
-                    pet_url.append(pet_data['Url'][num])                        
-                    probability.pop(0)            
+                    pet_url.append(pet_data['Url'][num])
+                    probability.pop(0)
                 if i <= j : break
         pick = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9][:turn]
         shuffle(pick)
@@ -743,8 +742,8 @@ def Postback_game(event):
     if re.search('抽獎編號', val):
         ordr = val.split('-')[1]
         room = val.split('-')[2]
-        redis_model.game_room =  redis_model.reply('game_room')
-        if room not in redis_model.game_room:   return
+        redis_model.game_room = redis_model.reply('game_room')
+        if room not in redis_model.game_room: return
         load_game = redis_model.reply(room)
         if ordr == '名單':
             game_list = '\n'.join(load_game['game_list'].values())
@@ -752,7 +751,7 @@ def Postback_game(event):
                 +'----抽取人數 : ' \
                 + load_game['game_max'] \
                 +'\n參加名單\n--------\n' \
-                + game_list   
+                + game_list
             TextMsg(event, text)
             return
         try:
@@ -794,10 +793,10 @@ def Postback_game(event):
                  + '\n得獎名單\n--------\n' \
                  + game_list
             load_game['game_end'] = True
-            redis_model.game_room =  redis_model.game_room.remove(room)
+            redis_model.game_room = redis_model.game_room.remove(room)
             redis_model.insert(room, load_game)
             TextMsg(event, text)
-            return    
+            return
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
