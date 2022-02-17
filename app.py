@@ -332,14 +332,15 @@ class game_rank():
             for j in ['LINE_NAME', 'GAME_NAME', 'Counts']:
                 space = self.spacebox(text= data.iloc[i][j], color= '#000000')
                 row['contents'].append(space)
-        game['body']['contents'].append(row)
+            game['body']['contents'].append(row)
         return game
     def insert(self, data):
         for i in self.Msgtype.keys():
             add = data[data['MsgType']== i]
             if len(add) == 0 : continue
-            add.sort_values(by=['Counts'],ascending = False).reset_index(drop=True)
+            add.sort_values(by=['Counts'], ascending = False).reset_index(drop=True)
             add = add.iloc[:10]
+            add['Counts'] = add['Counts'].astype('str')
             self.flex_carousel['contents'].append(self.rank(i, add))
 
 #百度搜圖
