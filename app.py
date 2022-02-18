@@ -69,7 +69,7 @@ class redis_db():
             'Sticker' : random.randint(3,5),
             'Unsend' : -1 * random.randint(0,5),
             'Image' : random.randint(5,10),
-            'postback' : 1
+            'Postback' : 1
         }
     def reply(self, KeyName):
         val = self.connect.get(KeyName)
@@ -102,14 +102,14 @@ class redis_db():
         except:
             None
         try:
+            self.data[event.source.user_id][message_type] += 1
+        except:
+            self.data[event.source.user_id][message_type] = 1
+        try:
             self.data[event.source.user_id]['EXP'] += self.magnify[message_type] 
             if self.data[event.source.user_id]['EXP'] < 0 : self.data[event.source.user_id]['EXP'] = 0
         except:
             self.data[event.source.user_id]['EXP'] = 0
-        try:
-            self.data[event.source.user_id][message_type] += 1
-        except:
-            self.data[event.source.user_id][message_type] = 1
         try:
             self.insert(event.source.group_id, self.data)
         except:
@@ -359,11 +359,10 @@ class game_rank():
             add = add.sort_values(by=['Counts'], ascending = False).reset_index(drop=True)
             add = add.iloc[:10]
             if i == 'EXP':
-                add = add.iloc[:10]
                 add['LEVEL'] = 1 + add['Counts'] / 100
                 add['LEVEL'] = add['LEVEL'].astype('int').astype('str')
                 add['EXP'] = add['Counts'] % 100
-                add['EXP'] = add['Counts'].astype('str') + '%'
+                add['EXP'] = add['EXP'].astype('str') + '%'
                 self.flex_carousel['contents'].append(self.level(i, add))
                 continue
             add['Counts'] = add['Counts'].astype('str')
@@ -693,21 +692,22 @@ def reply(event):
         ImageMsg(event, uploaded_image.link)
         return 
 
-#查看資料庫 redis_model.connect.keys()
-    if re.search('清空抽獎紀錄', msg):
-        for elem in redis_model.connect.keys():
-            if elem[0] == 'r' :
+    if re.search('清空', msg):
+        if event.source.user_id not in admin_id:
+            return
+        if re.search('清空抽獎紀錄', msg):
+            for elem in redis_model.connect.keys():
+                if elem[0] == 'r' :
+                    redis_model.pop(elem)
+            TextMsg(event, '清空抽獎紀錄完成')
+            return
+        if re.search('清空資料庫', msg):
+            for elem in redis_model.connect.keys():
                 redis_model.pop(elem)
-        TextMsg(event, '清空抽獎紀錄完成')
-        return
-
-    if re.search('清空資料庫', msg):
-        for elem in redis_model.connect.keys():
-            redis_model.pop(elem)
-        redis_model.insert('game_room', [])
-        redis_model.insert('personal', {})
-        TextMsg(event, '資料庫清空完成')
-        return
+            redis_model.insert('game_room', [])
+            redis_model.insert('personal', {})
+            TextMsg(event, '資料庫清空完成')
+            return
 
 @handler.add(PostbackEvent)
 def Postback_game(event):
