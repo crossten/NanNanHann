@@ -19,13 +19,13 @@ import random
 import pyimgur
 import requests
 
-#line-api 必須放上自己的Channel Access Token、Channel Secret
+# 必須放上自己的Channel Access Token、Channel Secret
 channel_access_token = 'channel_access_token'
 channel_secret = 'channel_secret'
-#管理員帳號 
-admin_id = ['admin_id']
-#分享照片Imgur-api
-im = pyimgur.Imgur('Imgur') 
+#管理員帳號
+admin_id = ['line_uid#1', 'line_uid#2']
+#分享照片
+im = pyimgur.Imgur('Imgur_api') 
 
 #常用定義/功能
 app = Flask(__name__)
@@ -35,7 +35,7 @@ member = pd.read_csv('member.csv', header= 0, index_col= None)
 member['GAME_NAME'] = member['GAME_NAME'].fillna(',')+ ','+ member['LINE_NAME'] 
 member['GAME_NAME']  = member['GAME_NAME'].str.split(',', expand=True)[0]
 MsgLog = pd.DataFrame(columns = ['user_id', 'display_name', 'message_id', 'msg'])
-Keyword_image = os.listdir('pitchure')        
+Keyword_image = os.listdir('pitchure')
 pet_new = pd.DataFrame(
     data = {
         'Name': '★★★★托奇',
@@ -52,7 +52,7 @@ Unsend_list = {}
 #redis_db設定 --redis-api
 class redis_db():
     def __init__(self):
-        self.host = 'redis-host.com'
+        self.host = 'redis-cloud.redislabs.com'
         self.port = 'port'
         self.password = 'password'
         self.connect = redis.StrictRedis(
@@ -64,22 +64,39 @@ class redis_db():
         self.data = {},
         self.game_room = []
         self.game_key = {}
-    def insert(self, KeyName, text):
-        self.connect.set(KeyName, json.dumps(text))
     def reply(self, KeyName):
         val = self.connect.get(KeyName)
         return json.loads(val)
+    def insert(self, KeyName, text):
+        self.connect.set(KeyName, json.dumps(text))
     def pop(self, KeyName):
         self.connect.delete(KeyName)
-    def update(self, event, message_type):
+    def read_data(self, event):
         try:
             self.data = self.reply(event.source.group_id)
         except:
-            self.data = self.reply('personal')            
+            try:
+                event.source.group_id
+                self.data = {}
+            except:
+                self.data = self.reply('personal')
+        if event.source.user_id not in self.data.keys():
+            self.data[event.source.user_id] = {}       
+    def update(self, event, message_type):
+        self.read_data(event)
+        try:
+            profile_group = line_bot_api.get_group_summary(event.source.group_id) 
+            self.data['name'] = profile_group.group_name
+        except:
+            None
+        try:
+            profile_user = line_bot_api.get_profile(event.source.user_id)
+            self.data[event.source.user_id]['name'] = profile_user.display_name
+        except:
+            None
         try:
             self.data[event.source.user_id][message_type] += 1
         except:
-            self.data[event.source.user_id] = {}
             self.data[event.source.user_id][message_type] = 1
         try:
             self.insert(event.source.group_id, self.data)
@@ -266,10 +283,10 @@ class game_rank():
             'postback' : '狂點按鈕'
         }
         self.image = {
-            'Image' : 'https://i.imgur.com/aYYAzNm.png',
+            'Msg' : 'https://i.imgur.com/M3MZ7Ox.jpg',
             'Sticker' : 'https://pic.52112.com/180623/JPG-180623A_368/glj9rVcoRS_small.jpg',
             'Unsend' : 'https://img.ltn.com.tw/Upload/news/600/2019/03/14/2726930_1.jpg',
-            'Msg' : 'https://i.imgur.com/M3MZ7Ox.jpg',
+            'Image' : 'https://i.imgur.com/aYYAzNm.png',
             'postback' : 'https://img.sj3c.com.tw/uploads/2018/03/KEY-1-2-min.jpg'
         }
         self.flex_carousel = {'contents':[],'type':'carousel'}
@@ -296,7 +313,7 @@ class game_rank():
     def rank(self, group, data):
         game = {
             'type': 'bubble',
-            'size' : 'giga',
+            'size' : 'mega',
             }
         game['header'] = {
             'type': 'box',
@@ -315,7 +332,8 @@ class game_rank():
             'type': 'image',
             'url': self.image[group],
             'size': 'full',
-            'aspectMode': 'fit'
+            'aspectRatio': '20:13',
+            'aspectMode': 'cover'
             }
         game['body'] = {
             'type': 'box',
@@ -338,7 +356,7 @@ class game_rank():
         for i in self.Msgtype.keys():
             add = data[data['MsgType']== i]
             if len(add) == 0 : continue
-            add.sort_values(by=['Counts'], ascending = False).reset_index(drop=True)
+            add = add.sort_values(by=['Counts'], ascending = False).reset_index(drop=True)
             add = add.iloc[:10]
             add['Counts'] = add['Counts'].astype('str')
             self.flex_carousel['contents'].append(self.rank(i, add))
@@ -400,9 +418,7 @@ class game_pet():
         self.theme = '抽幻獸 {name} 活動池'.format(name = pet_new['Name'][0])
     def menu(self):
         game = {
-            'type': 'bubble',
-            'header' : {},
-            'footer' : {}
+            'type': 'bubble'
             }
         game['header'] = {
             'type': 'box',
@@ -560,7 +576,7 @@ def reply(event):
             profile_group = line_bot_api.get_group_summary(event.source.group_id) 
             profile_name = profile_group.group_name
     except:
-        None
+        None   
     redis_model.update(event, 'Msg')
     MsgLog = MsgLog.append(
                 {
@@ -580,13 +596,6 @@ def reply(event):
     except:
         None
 
-    if re.search('加入清單', msg):
-        text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
-        for i, j in zip(join_list.keys(), join_list.values()):
-            text += '{uid},{name}\n'.format(uid= i, name= j)
-        TextMsg(event, text)
-        return
-
     if re.search('加入王國', msg):
         text = event.source.user_id \
             + '\n' \
@@ -597,7 +606,7 @@ def reply(event):
             + profile_user.picture_url
         join_list[event.source.user_id] = '{name},{game}'.format(name= profile_name, game = msg.split(',')[0])
         MultMsg(admin_id, text)
-        TextMsg(event, profile_name+ ' 歡迎加入王國抽獎名單~')
+        TextMsg(event, profile_name+ ' 歡迎加入王國名單~')
         return
         
     if re.search('抽獎', msg):
@@ -693,15 +702,6 @@ def reply(event):
         uploaded_image = im.upload_image(pick)
         ImageMsg(event, uploaded_image.link)
         return 
-
-#查看資料庫 redis_model.connect.keys()
-    if re.search('清空資料庫', msg):
-        for elem in redis_model.connect.keys():
-            redis_model.pop(elem)
-        redis_model.insert('game_room', [])
-        redis_model.insert('personal', {})
-        TextMsg(event, '資料庫清空完成')
-        return
 
 @handler.add(PostbackEvent)
 def Postback_game(event):
