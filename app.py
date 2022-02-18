@@ -64,6 +64,13 @@ class redis_db():
         self.data = {},
         self.game_room = []
         self.game_key = {}
+        self.magnify = {
+            'Msg' : random.randint(0,3),
+            'Sticker' : random.randint(3,5),
+            'Unsend' : -1 * random.randint(0,5),
+            'Image' : random.randint(5,10),
+            'postback' : 1
+        }
     def reply(self, KeyName):
         val = self.connect.get(KeyName)
         return json.loads(val)
@@ -95,6 +102,11 @@ class redis_db():
         except:
             None
         try:
+            self.data[event.source.user_id]['EXP'] += self.magnify[message_type] 
+            if self.data[event.source.user_id]['EXP'] < 0 : self.data[event.source.user_id]['EXP'] = 0
+        except:
+            self.data[event.source.user_id]['EXP'] = 0
+        try:
             self.data[event.source.user_id][message_type] += 1
         except:
             self.data[event.source.user_id][message_type] = 1
@@ -108,12 +120,12 @@ def PushMsg(uid, text):
     try:
         line_bot_api.push_message(to= uid, messages= TextSendMessage(text= text))
     except:
-        print('line pushmsg發送失敗')
+        None
 def MultMsg(uid, text): 
     try:
         line_bot_api.multicast(to= uid,messages= TextSendMessage(text= text))
     except:
-        print('line pushmsg發送失敗')
+        None
 def MultFlexMsg(uid, text, flex): 
     try:
         line_bot_api.multicast(to= uid,
@@ -121,7 +133,7 @@ def MultFlexMsg(uid, text, flex):
             )
         )
     except:
-        print('line pushmsg發送失敗')
+        None
 #文字訊息
 def TextMsg(event, text): 
     line_bot_api.reply_message(
@@ -150,7 +162,7 @@ def ImageMsg(event, URL):
 #抽獎介面
 class Lottery():
     def __init__(self):
-        self.jpg = {
+        self.item = {
             '狼' : 'https://content.quizzclub.com/trivia/2018-11/gde-obitaet-dingo.jpg',
             '綠木' : 'https://i.imgur.com/S1c4F5a.jpg',
             '火焰' : 'https://i.imgur.com/ngbSa6K.png',
@@ -161,114 +173,76 @@ class Lottery():
             '魔法書頁' : 'https://img.itw01.com/images/2019/04/10/14/1258_JPVi2W_UFJOBEH.jpg!r800x0.jpg',
             '逆轉' : 'https://resource01-proxy.ulifestyle.com.hk/res/v3/image/content/2300000/2301165/time02--_1024.jpg'
             }
+        self.separator = {'type': 'separator'}
+    def base_box(self, layout):
+        box = {
+            'type': 'box',
+            'layout': layout,
+            'contents': []
+                }
+        return box
+    def image_box(self, image):
+        box = {
+            'type': 'image',
+            'url': image,
+            'size': 'full',
+            'aspectMode': 'cover'
+                }
+        return box
+    def text_box(self, text, color):
+        box = {
+            'type': 'text',
+            'text': text,
+            'weight': 'bold',
+            'color': color,
+            'size': 'sm'
+                }
+        return box
+    def button_box(self, backgroundColor):
+        box = {
+            'type': 'box',
+            'layout': 'horizontal',
+            'backgroundColor': backgroundColor,
+            'contents': []
+            } 
+        return box
+    def button(self,color, label, data):
+        box = {
+            'type': 'button',
+            'color' : color,
+            'style' : 'primary'
+            }
+        box['action'] = {
+                'type': 'postback',
+                'label': label,
+                'data': data
+                }
+        return box
     def flex(self, room, award, sizes):
         try :
             award_rex = re.search('|'.join(self.self.keys()), award).group(0)
-            jpg = self.jpg[award_rex]
+            image_link = self.item[award_rex]
         except :
-            jpg = 'https://i.imgur.com/IoPqQPZ.png'
+            image_link = 'https://i.imgur.com/IoPqQPZ.png'
         game = {
             'type': 'bubble',
             'size' : 'giga',
             }
-        game['header'] = {
-            'type': 'box',
-            'layout': 'vertical',
-            'contents': []
-                }
-        image = {
-            'type': 'image',
-            'url': jpg,
-            'size': 'full',
-            'aspectMode': 'cover'
-                }
-        game['header']['contents'].append(image)
-        game['body'] = {
-                'type': 'box',
-                'layout': 'vertical',
-                'contents': []
-                }
-        tittle = {
-            'type': 'text',
-            'text': award + ' 抽取人數 : '+ sizes + ' ----開始報名',
-            'weight': 'bold',
-            'color': '#171717',
-            'size': 'sm'
-                }
-        separator = {'type': 'separator'}
-        instruction = {
-            'type': 'text',
-            'text': '代抽方式 : 遊戲名稱,{room},參加抽獎'.format(room = room),
-            'weight': 'bold',
-            'color': '#171717',
-            'size': 'sm'
-                }
-        game['body']['contents'].append(tittle)
-        game['body']['contents'].append(separator)
-        game['body']['contents'].append(instruction)
-        game['footer'] = {
-            'type': 'box',
-            'layout': 'vertical',
-            'backgroundColor': '#fffdeb',
-            'contents' : []
-                }
-        buttonbox = {
-            'type': 'box',
-            'layout': 'horizontal',
-            'backgroundColor': '#fffdeb',
-            'contents': []
-            }
-        button = {
-            'type': 'button',
-            'color' : '#ffbc47',
-            'style' : 'primary',
-            'action': {
-                'type': 'postback',
-                'label': '參加抽獎',
-                'data': '抽獎編號-參加-' + room
-                }
-            }
-        buttonbox['contents'].append(button)
-        button = {
-            'type': 'button',
-            'color' : '#ffbc47',
-            'style' : 'primary',
-            'action': {
-                'type': 'postback',
-                'label': '取消抽獎',
-                'data': '抽獎編號-取消-' + room
-                }
-            }
-        buttonbox['contents'].append(button)
-        button = {
-            'type': 'button',
-            'color' : '#ffbc47',
-            'style' : 'primary',
-            'action': {
-                'type': 'postback',
-                'label': '參加名單',
-                'data': '抽獎編號-名單-' + room
-                }
-            }
-        buttonbox['contents'].append(button)
+        game['header'] = self.base_box('vertical')
+        game['header']['contents'].append(self.image_box(image= image_link))
+        game['body'] = self.base_box('vertical')
+        game['body']['contents'].append(self.text_box(text= award + ' 抽取人數 : '+ sizes + ' ----開始報名', color= '#171717'))
+        game['body']['contents'].append(self.separator)
+        game['body']['contents'].append(self.text_box(text= '代抽方式 : 遊戲名稱,{room},參加抽獎'.format(room = room), color= '#171717'))
+        game['footer'] = self.base_box('vertical')
+        game['footer']['backgroundColor'] = '#fffdeb'
+        buttonbox = self.button_box(backgroundColor= '#fffdeb')
+        buttonbox['contents'].append(self.button(color= '#ffbc47', label= '參加抽獎', data= '抽獎編號-參加-' + room))
+        buttonbox['contents'].append(self.button(color= '#ffbc47', label= '取消抽獎', data= '抽獎編號-取消-' + room))
+        buttonbox['contents'].append(self.button(color= '#ffbc47', label= '參加名單', data= '抽獎編號-名單-' + room))
         game['footer']['contents'].append(buttonbox)
-        buttonbox = {
-            'type': 'box',
-            'layout': 'horizontal',
-            'backgroundColor': '#ffe6cc',
-            'contents': []
-            }
-        button = {
-            'type': 'button',
-            'color' : '#ababab',
-            'style' : 'primary',
-            'action': {
-                'type': 'postback',
-                'label': '開獎',
-                'data': '抽獎編號-開獎-' + room
-                }
-            }
-        buttonbox['contents'].append(button)
+        buttonbox = self.button_box(backgroundColor= '#ffe6cc')
+        buttonbox['contents'].append(self.button(color= '#ababab',label= '開獎', data= '抽獎編號-開獎-' + room))  
         game['footer']['contents'].append(buttonbox)
         return game
 
@@ -276,26 +250,60 @@ class Lottery():
 class game_rank():
     def __init__(self):
         self.Msgtype = {
+            'EXP' : '等級',
             'Msg' : '幹話王',
             'Sticker' : '貼圖王',
             'Unsend' : '訊息回收車',
             'Image' : '圖片老司機',
-            'postback' : '狂點按鈕'
+            'Postback' : '狂點按鈕'
         }
         self.image = {
+            'EXP' : 'https://tv-english.club/wp-content/uploads/2014/11/Level-Up_500px.jpg',
             'Msg' : 'https://i.imgur.com/M3MZ7Ox.jpg',
             'Sticker' : 'https://pic.52112.com/180623/JPG-180623A_368/glj9rVcoRS_small.jpg',
             'Unsend' : 'https://img.ltn.com.tw/Upload/news/600/2019/03/14/2726930_1.jpg',
             'Image' : 'https://i.imgur.com/aYYAzNm.png',
-            'postback' : 'https://img.sj3c.com.tw/uploads/2018/03/KEY-1-2-min.jpg'
+            'Postback' : 'https://img.sj3c.com.tw/uploads/2018/03/KEY-1-2-min.jpg'
         }
         self.flex_carousel = {'contents':[],'type':'carousel'}
+    def base_box(self, layout):
+        box = {
+            'type': 'box',
+            'layout': layout,
+            'contents': []
+                }
+        return box
+    def text_box(self, text, color):
+        box = {
+            'type': 'text',
+            'text': text,
+            'weight': 'bold',
+            'color': color,
+            'size': 'xl'
+                }
+        return box
+    def rank_box(self, group):
+        game = {
+            'type': 'bubble',
+            'size' : 'mega',
+            }
+        game['header'] = self.base_box(layout= 'vertical')
+        game['header']['contents'].append(self.text_box(text= self.Msgtype[group] + ' 排行榜', color= '#171717'))
+        game['hero'] = {
+            'type': 'image',
+            'url': self.image[group],
+            'size': 'full',
+            'aspectRatio': '20:13',
+            'aspectMode': 'cover'
+            }
+        game['body'] = self.base_box(layout= 'vertical')
+        return game
     def rowbox(self, color):
         box = {
             'type': 'box',
             'layout': 'horizontal',
             'backgroundColor': color,
-            'paddingAll': '5px',
+            'height': '16px',
             'contents': []
         }
         return box
@@ -310,36 +318,27 @@ class game_rank():
             'adjustMode': 'shrink-to-fit'
         }
         return box
+    def level(self, group, data):
+        game = self.rank_box(group)
+        row = self.rowbox(color = '#3C3C3C')
+        for i in ['LEVEL', 'LINE', '遊戲名稱', '經驗值']:
+            space = self.spacebox(text= i, color= '#FFFFFF')
+            row['contents'].append(space)
+        game['body']['contents'].append(row)
+        for i in range(len(data)):
+            row = self.rowbox(color = '#FCFCFC')
+            for j in ['LEVEL', 'LINE_NAME', 'GAME_NAME']:
+                space = self.spacebox(text= data.iloc[i][j], color= '#000000')
+                row['contents'].append(space)
+            back = self.rowbox(color = '#FAD2A76E')
+            bar = self.rowbox(color = '#FF641C')
+            bar['width'] = data.iloc[i]['EXP']
+            back['contents'].append(bar)
+            row['contents'].append(back)
+            game['body']['contents'].append(row)
+        return game
     def rank(self, group, data):
-        game = {
-            'type': 'bubble',
-            'size' : 'mega',
-            }
-        game['header'] = {
-            'type': 'box',
-            'layout': 'vertical',
-            'contents': []
-            }
-        tittle = {
-                'type': 'text',
-                'text': self.Msgtype[group] + ' 累積排行榜',
-                'weight': 'bold',
-                'color': '#171717',
-                'size': 'xl'
-            }
-        game['header']['contents'].append(tittle)
-        game['hero'] = {
-            'type': 'image',
-            'url': self.image[group],
-            'size': 'full',
-            'aspectRatio': '20:13',
-            'aspectMode': 'cover'
-            }
-        game['body'] = {
-            'type': 'box',
-            'layout': 'vertical',
-            'contents': []
-            }
+        game = self.rank_box(group)
         row = self.rowbox(color = '#3C3C3C')
         for i in ['LINE', '遊戲名稱', '累積次數']:
             space = self.spacebox(text= i, color= '#FFFFFF')
@@ -356,8 +355,17 @@ class game_rank():
         for i in self.Msgtype.keys():
             add = data[data['MsgType']== i]
             if len(add) == 0 : continue
+            add = add.fillna(0)
             add = add.sort_values(by=['Counts'], ascending = False).reset_index(drop=True)
             add = add.iloc[:10]
+            if i == 'EXP':
+                add = add.iloc[:10]
+                add['LEVEL'] = 1 + add['Counts'] / 100
+                add['LEVEL'] = add['LEVEL'].astype('int').astype('str')
+                add['EXP'] = add['Counts'] % 100
+                add['EXP'] = add['Counts'].astype('str') + '%'
+                self.flex_carousel['contents'].append(self.level(i, add))
+                continue
             add['Counts'] = add['Counts'].astype('str')
             self.flex_carousel['contents'].append(self.rank(i, add))
 
@@ -414,89 +422,57 @@ pet_data = pet_data.sort_values(by=['Total']).reset_index(drop=True)
 class game_pet():
     def __init__(self) :
         self.flex_carousel = {'contents':[],'type':'carousel'}
-        self.url = pet_new['Url'][0]
+        self.image_url = pet_new['Url'][0]
         self.theme = '抽幻獸 {name} 活動池'.format(name = pet_new['Name'][0])
-    def menu(self):
-        game = {
-            'type': 'bubble'
-            }
-        game['header'] = {
+    def base_box(self, layout):
+        box = {
             'type': 'box',
-                'layout': 'vertical',
-                'contents': []
+            'layout': layout,
+            'contents': []
                 }
-        image = {
+        return box
+    def image_box(self, image_url):
+        box = {
             'type': 'image',
-            'url': self.url,
+            'url': image_url,
             'size': 'full',
             'aspectMode': 'cover'
             }
-        game['header']['contents'].append(image)
-        game['footer'] = {
-            'type': 'box',
-            'layout': 'horizontal',
-            'backgroundColor': '#fffdeb',
-            'contents': []
-                }
-        button = {
-            'type': 'button',
-            'action': {
+        return box
+    def button(self, label, data):
+        box = {'type': 'button'}
+        box['action'] = {
                 'type': 'postback',
-                'label': '單抽',
-                'data': '抽幻獸1抽'}
-                }
-        game['footer']['contents'].append(button)
-        button = {
-            'type': 'button',
-            'action': {
-                'type': 'postback',
-                'label': '十抽',
-                'data': '抽幻獸10抽'
-                }
+                'label': label,
+                'data': data
             }
-        game['footer']['contents'].append(button)
+        return box
+    def menu(self):
+        game = {'type': 'bubble'}
+        game['header'] = self.base_box(layout = 'vertical')
+        game['header']['contents'].append(self.image_box(image_url= self.image_url))
+        game['footer'] = self.base_box(layout = 'horizontal')
+        game['footer']['backgroundColor'] = '#FFFDEB'
+        game['footer']['contents'].append(self.button(label= '單抽', data= '抽幻獸1抽'))
+        game['footer']['contents'].append(self.button(label= '十抽', data= '抽幻獸10抽'))
         return game
     def report(self, player, pet_url, pet_name):
         flex = {'type': 'bubble'}
-        flex['body'] = {
-                'type': 'box',
-                'layout': 'vertical',
-                'contents': []
-            }
-        flex['footer'] = {
-            'type': 'box',
-            'layout': 'vertical',
-            'contents': []
-            }
-        image = {
-            'type': 'image',
-            'url': pet_url,
-            'size': 'full',
-            'aspectRatio': '12:9',
-            'aspectMode': 'cover'
-            }
+        flex['body'] = self.base_box(layout = 'vertical')
+        flex['footer'] = self.base_box(layout = 'vertical')
+        image = self.image_box(image_url= pet_url)
+        image['aspectRatio'] = '12:9'
         flex['footer']['contents'].append(image)
-        name = {
+        add_box = self.base_box(layout = 'vertical')
+        add_box['spacing'] = 'sm'
+        add_player = {
             'type': 'text',
             'text': player,
             'weight': 'bold',
             'size': 'sm',
             'margin': 'md'
             }
-        tittle = {
-            'type': 'text',
-            'text': self.theme,
-            'weight': 'bold',
-            'color': '#1f1f1f',
-            'size': 'sm'
-            }
-        drawer = {
-            'type': 'box',
-            'layout': 'vertical',
-            'spacing': 'sm',
-            'contents': []
-            }
-        pet = {
+        add_pet = {
             'type': 'text',
             'size': 'lg',
             'color': '#555555',
@@ -505,10 +481,17 @@ class game_pet():
             'flex': 0,
             'text': pet_name
             }
-        drawer['contents'].append(pet)
-        flex['body']['contents'].append(name)
-        flex['body']['contents'].append(tittle)
-        flex['body']['contents'].append(drawer)
+        add_theme = {
+            'type': 'text',
+            'text': self.theme,
+            'weight': 'bold',
+            'color': '#1f1f1f',
+            'size': 'sm'
+            }
+        add_box['contents'].append(add_pet)
+        flex['body']['contents'].append(add_player)
+        flex['body']['contents'].append(add_theme)
+        flex['body']['contents'].append(add_box)
         return flex
 
 #監聽所有來自 /callback 的 Post Request
@@ -595,6 +578,13 @@ def reply(event):
         return
     except:
         None
+
+    if re.search('加入清單', msg):
+        text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
+        for i, j in zip(join_list.keys(), join_list.values()):
+            text += '{uid},{name}\n'.format(uid= i, name= j)
+        TextMsg(event, text)
+        return
 
     if re.search('加入王國', msg):
         text = event.source.user_id \
@@ -703,6 +693,22 @@ def reply(event):
         ImageMsg(event, uploaded_image.link)
         return 
 
+#查看資料庫 redis_model.connect.keys()
+    if re.search('清空抽獎紀錄', msg):
+        for elem in redis_model.connect.keys():
+            if elem[0] == 'r' :
+                redis_model.pop(elem)
+        TextMsg(event, '清空抽獎紀錄完成')
+        return
+
+    if re.search('清空資料庫', msg):
+        for elem in redis_model.connect.keys():
+            redis_model.pop(elem)
+        redis_model.insert('game_room', [])
+        redis_model.insert('personal', {})
+        TextMsg(event, '資料庫清空完成')
+        return
+
 @handler.add(PostbackEvent)
 def Postback_game(event):
     val = event.postback.data
@@ -713,7 +719,7 @@ def Postback_game(event):
     except:
         TextMsg(event, '請先+好友~')
     try:
-        redis_model.update(event, 'postback')
+        redis_model.update(event, 'Postback')
     except:
         None
 
@@ -795,6 +801,7 @@ def Postback_game(event):
                  + game_list
             load_game['game_end'] = True
             redis_model.game_room = redis_model.game_room.remove(room)
+            redis_model.insert('game_room', redis_model.game_room)
             redis_model.insert(room, load_game)
             TextMsg(event, text)
             return
