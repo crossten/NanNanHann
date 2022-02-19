@@ -65,10 +65,11 @@ class redis_db():
         self.game_room = []
         self.game_key = {}
         self.magnify = {
-            'Msg' : random.randint(0,3),
-            'Sticker' : random.randint(3,5),
+            'Msg' : random.randint(0,5),
+            'Mention': random.randint(5,10),
+            'Sticker' : random.randint(3,8),
             'Unsend' : -1 * random.randint(0,5),
-            'Image' : random.randint(5,10),
+            'Image' : random.randint(7,15),
             'Postback' : 1
         }
     def reply(self, KeyName):
@@ -88,32 +89,32 @@ class redis_db():
             except:
                 self.data = self.reply('personal')
         if event.source.user_id not in self.data.keys():
-            self.data[event.source.user_id] = {}       
-    def update(self, event, message_type):
-        self.read_data(event)
-        try:
-            profile_group = line_bot_api.get_group_summary(event.source.group_id) 
-            self.data['name'] = profile_group.group_name
-        except:
-            None
+            self.data[event.source.user_id] = {}
+    def refresh(self, event):
         try:
             profile_user = line_bot_api.get_profile(event.source.user_id)
             self.data[event.source.user_id]['name'] = profile_user.display_name
         except:
             None
         try:
-            self.data[event.source.user_id][message_type] += 1
+            profile_group = line_bot_api.get_group_summary(event.source.group_id) 
+            self.data['name'] = profile_group.group_name
+            return [event.source.user_id, event.source.group_id]
         except:
-            self.data[event.source.user_id][message_type] = 1
+            return [event.source.user_id, 'personal']
+    def update(self, event, message_type, is_mention = False, mention_id = ''):
+        self.read_data(event)
+        member_id = [mention_id, event.source.group_id] if is_mention else self.refresh(event)
         try:
-            self.data[event.source.user_id]['EXP'] += self.magnify[message_type] 
-            if self.data[event.source.user_id]['EXP'] < 0 : self.data[event.source.user_id]['EXP'] = 0
+            self.data[member_id[0]][message_type] += 1
         except:
-            self.data[event.source.user_id]['EXP'] = 0
+            self.data[member_id[0]][message_type] = 1
         try:
-            self.insert(event.source.group_id, self.data)
+            self.data[member_id[0]]['EXP'] += self.magnify[message_type] 
+            if self.data[member_id[0]]['EXP'] < 0 : self.data[member_id[0]]['EXP'] = 0
         except:
-            self.insert('personal', self.data)
+            self.data[member_id[0]]['EXP'] = 0
+        self.insert(member_id[1], self.data)
 
 #推播訊息
 def PushMsg(uid, text): 
@@ -220,13 +221,13 @@ class Lottery():
         return box
     def flex(self, room, award, sizes):
         try :
-            award_rex = re.search('|'.join(self.self.keys()), award).group(0)
+            award_rex = re.search('|'.join(self.item.keys()), award).group(0)
             image_link = self.item[award_rex]
         except :
             image_link = 'https://i.imgur.com/IoPqQPZ.png'
         game = {
             'type': 'bubble',
-            'size' : 'giga',
+            'size' : 'mega',
             }
         game['header'] = self.base_box('vertical')
         game['header']['contents'].append(self.image_box(image= image_link))
@@ -252,6 +253,7 @@ class game_rank():
         self.Msgtype = {
             'EXP' : '等級',
             'Msg' : '幹話王',
+            'Mention' : '人氣王',
             'Sticker' : '貼圖王',
             'Unsend' : '訊息回收車',
             'Image' : '圖片老司機',
@@ -260,6 +262,7 @@ class game_rank():
         self.image = {
             'EXP' : 'https://tv-english.club/wp-content/uploads/2014/11/Level-Up_500px.jpg',
             'Msg' : 'https://i.imgur.com/M3MZ7Ox.jpg',
+            'Mention' : 'https://i.imgur.com/7GCQVUD.png',
             'Sticker' : 'https://pic.52112.com/180623/JPG-180623A_368/glj9rVcoRS_small.jpg',
             'Unsend' : 'https://img.ltn.com.tw/Upload/news/600/2019/03/14/2726930_1.jpg',
             'Image' : 'https://i.imgur.com/aYYAzNm.png',
@@ -560,6 +563,17 @@ def reply(event):
     except:
         None   
     redis_model.update(event, 'Msg')
+    try:
+        mention = event.message.mention.mentionees
+        for i in mention :
+            redis_model.update(event, 'Mention', True, i.user_id)
+        if re.search('加入王國', msg):
+            for i, j in zip(mention, msg.split('@')[1:]) :
+                join_list[i.user_id] = '{name},{game}'.format(name= j, game = j)
+            TextMsg(event, '新增至加入清單')
+            return
+    except:
+        None
     MsgLog = MsgLog.append(
                 {
             'user_id': event.source.user_id, 
@@ -598,6 +612,23 @@ def reply(event):
         TextMsg(event, profile_name+ ' 歡迎加入王國名單~')
         return
         
+    if re.search('清空', msg):
+        if event.source.user_id not in admin_id:
+            return
+        if re.search('清空抽獎紀錄', msg):
+            for elem in redis_model.connect.keys():
+                if elem[0] == 'r' :
+                    redis_model.pop(elem)
+            TextMsg(event, '清空抽獎紀錄完成')
+            return
+        if re.search('清空資料庫', msg):
+            for elem in redis_model.connect.keys():
+                redis_model.pop(elem)
+            redis_model.insert('game_room', [])
+            redis_model.insert('personal', {})
+            TextMsg(event, '資料庫清空完成')
+            return
+
     if re.search('抽獎', msg):
         game_split = msg.split(',')
         redis_model.game_room = redis_model.reply('game_room')
@@ -692,23 +723,6 @@ def reply(event):
         ImageMsg(event, uploaded_image.link)
         return 
 
-    if re.search('清空', msg):
-        if event.source.user_id not in admin_id:
-            return
-        if re.search('清空抽獎紀錄', msg):
-            for elem in redis_model.connect.keys():
-                if elem[0] == 'r' :
-                    redis_model.pop(elem)
-            TextMsg(event, '清空抽獎紀錄完成')
-            return
-        if re.search('清空資料庫', msg):
-            for elem in redis_model.connect.keys():
-                redis_model.pop(elem)
-            redis_model.insert('game_room', [])
-            redis_model.insert('personal', {})
-            TextMsg(event, '資料庫清空完成')
-            return
-
 @handler.add(PostbackEvent)
 def Postback_game(event):
     val = event.postback.data
@@ -800,7 +814,7 @@ def Postback_game(event):
                  + '\n得獎名單\n--------\n' \
                  + game_list
             load_game['game_end'] = True
-            redis_model.game_room = redis_model.game_room.remove(room)
+            redis_model.game_room.remove(room)
             redis_model.insert('game_room', redis_model.game_room)
             redis_model.insert(room, load_game)
             TextMsg(event, text)
