@@ -94,6 +94,7 @@ class redis_db():
         try:
             profile_user = line_bot_api.get_profile(event.source.user_id)
             self.data[event.source.user_id]['name'] = profile_user.display_name
+            self.data[event.source.user_id]['url'] = profile_user.picture_url
         except:
             None
         try:
@@ -371,6 +372,85 @@ class game_rank():
             add['Counts'] = add['Counts'].astype('str')
             self.flex_carousel['contents'].append(self.rank(i, add))
 
+#名片介面
+class carte():
+    def __init__(self):
+        self.Msgtype = {
+            'Msg' : '訊息數',
+            'Mention' : '被Tag次數',
+            'Sticker' : '貼圖次數',
+            'Unsend' : '回收訊息次數',
+            'Image' : '圖片次數',
+            'Postback' : '按鈕點擊次數',
+            'EXP' : '經驗值'
+        }
+        self.flex_carousel = {'contents':[],'type':'carousel'}
+        self.separator = {'type': 'separator', 'color' : '#E0E0E0'}
+    def base_box(self, layout):
+        box = {
+            'type': 'box',
+            'layout': layout,
+            'contents': []
+                }
+        return box
+    def image_box(self, image_url):
+        box = {
+            'type': 'image',
+            'url': image_url,
+            'aspectMode': 'cover',
+            'size': 'full'
+                }
+        return box
+    def text_box(self, text, size):
+        box = {
+            'type': 'text',
+            'text': text,
+            'color' : '#E0E0E0',
+            'size' : size
+                }
+        return box
+    def flex(self, line_uid, user_data):
+        member_keys = user_data.keys()
+        bub = {'type': 'bubble', 'size' : 'giga'}
+        user_data['EXP'] = 0 if 'EXP' not in member_keys else user_data['EXP']
+        bub['body'] = self.base_box(layout = 'horizontal')
+        bub['body']['backgroundColor'] = '#3D3D3D'
+        if 'url' in member_keys:
+            bub['body']['contents'].append(self.image_box(image_url = user_data['url']) )
+        else :
+            bub['body']['contents'].append(self.image_box(image_url= 'https://cdn0.popo.tw/uc/61/50365/O.jpg'))
+        user_data['LEVEL'] = 1 + int(user_data['EXP'] / 100)
+        box_vertical = self.base_box(layout = 'vertical')
+        box_vertical['paddingStart'] = 'md'
+        box = self.base_box(layout = 'baseline')
+        text = self.text_box(text = 'Level : ' + str(user_data['LEVEL']), size = 'lg')
+        box['contents'].append(text)
+        box_vertical['contents'].append(box)
+        box_vertical['contents'].append(self.separator)
+        try:
+            game_name = member['GAME_NAME'][member['LINE_UID'] == line_uid].iloc[0]
+        except:
+            game_name = user_data['name'] if 'name' in member_keys else '未登入名稱'
+        box = self.base_box(layout = 'baseline')
+        box['spacing'] = 'sm'
+        box['contents'].append(self.text_box(text = game_name, size = 'lg'))
+        box_vertical['contents'].append(box)
+        for i in self.Msgtype.keys():
+            if i in member_keys:
+                box = self.base_box(layout = 'baseline')
+                box['spacing'] = 'sm'
+                text = self.text_box(text = '{row} : {data}'.format(row = self.Msgtype[i], data = user_data[i]), size = 'sm')
+                box['contents'].append(text)
+                box_vertical['contents'].append(box)
+        exp = int(user_data['EXP'] % 100)
+        bub['body']['contents'].append(box_vertical)
+        bub['footer'] = self.base_box(layout = 'baseline')
+        bub['footer']['width'] = str(exp) + '%'
+        bub['footer']['height'] = '16px'
+        bub['footer']['backgroundColor'] = '#FF6666'
+        self.flex_carousel['contents'].append(bub)
+        
+
 #百度搜圖
 def baidu(keyword):
     url = 'https://image.baidu.com/search/acjson?'
@@ -567,10 +647,21 @@ def reply(event):
         mention = event.message.mention.mentionees
         for i in mention :
             redis_model.update(event, 'Mention', True, i.user_id)
+        if re.search('查詢', msg):
+            card = carte()
+            redis_model.data = redis_model.reply(event.source.group_id)
+            try:
+                for num, i in enumerate(mention) :
+                    line_uid = i.user_id
+                    card.flex(line_uid, redis_model.data[line_uid])
+                    if num == 10: break
+                FlexMsg(event, '查詢名片', card.flex_carousel)
+            except:
+                TextMsg(event, msg.split('@')[1]+ ' 尚未留下任何紀錄')
         if re.search('加入王國', msg):
             for i, j in zip(mention, msg.split('@')[1:]) :
-                join_list[i.user_id] = '{name},{game}'.format(name= j, game = j)
-            TextMsg(event, '新增至加入清單')
+                join_list[i.user_id] = '{name},{game}'.format(name= j.split(' ')[0], game = j.split(' ')[1])
+            TextMsg(event, '新增至加入清單\n' + msg)
             return
     except:
         None
@@ -593,9 +684,12 @@ def reply(event):
         None
 
     if re.search('加入清單', msg):
+        if event.source.user_id not in admin_id:
+           return
         text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
         for i, j in zip(join_list.keys(), join_list.values()):
             text += '{uid},{name}\n'.format(uid= i, name= j)
+        join_list = {}
         TextMsg(event, text)
         return
 
@@ -626,6 +720,7 @@ def reply(event):
                 redis_model.pop(elem)
             redis_model.insert('game_room', [])
             redis_model.insert('personal', {})
+            redis_model.insert('keyword', {})
             TextMsg(event, '資料庫清空完成')
             return
 
@@ -722,6 +817,34 @@ def reply(event):
         uploaded_image = im.upload_image(pick)
         ImageMsg(event, uploaded_image.link)
         return 
+
+    keyword_dict = redis_model.reply('keyword')
+    if re.search('關鍵字', msg):
+        key = msg.split(' ')[1].split('=')[0]
+        word = msg.split(' ')[1].split('=')[1]
+        if re.search('新增關鍵字', msg):
+            if key in keyword_dict.keys():
+                keyword_dict[key].append(word)
+            else :
+                keyword_dict[key] = [word] 
+            redis_model.insert('keyword', keyword_dict)
+            TextMsg(event, key + '--------新增成功')            
+        elif re.search('刪除關鍵字', msg):
+            if key in keyword_dict.keys():
+                try:
+                    keyword_dict[key].remove(word)
+                    if keyword_dict[key] == [] : del keyword_dict[key]
+                    redis_model.insert('keyword', keyword_dict)
+                    TextMsg(event, key + '--------刪除成功')
+                except :
+                    TextMsg(event, '刪除失敗\n '+ key +' : '+ keyword_dict[key])
+        return
+
+    if re.search('|'.join(keyword_dict.keys()), msg):
+        part = re.search('|'.join(keyword_dict.keys()), msg).group(0)
+        TextMsg(event, random.choice(keyword_dict[part]))
+        return
+
 
 @handler.add(PostbackEvent)
 def Postback_game(event):
