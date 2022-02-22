@@ -21,6 +21,8 @@ import pyimgur
 import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from itertools import product
+
 # 必須放上自己的Channel Access Token、Channel Secret
 channel_access_token = 'channel_access_token'
 channel_secret = 'channel_secret'
@@ -232,7 +234,7 @@ class Lottery():
             image_link = 'https://i.imgur.com/IoPqQPZ.png'
         game = {
             'type': 'bubble',
-            'size' : 'mega',
+            'size' : 'giga',
             }
         game['header'] = self.base_box('vertical')
         game['header']['contents'].append(self.image_box(image= image_link))
@@ -452,8 +454,8 @@ class carte():
         bub['footer']['width'] = str(exp) + '%'
         bub['footer']['height'] = '16px'
         bub['footer']['backgroundColor'] = '#FF6666'
-        self.flex_carousel['contents'].append(bub)
-        
+        self.flex_carousel['contents'].append(bub)        
+
 #百度搜圖
 def baidu(keyword):
     url = 'https://image.baidu.com/search/acjson?'
@@ -581,33 +583,34 @@ class game_pet():
 
 class chrome_coupon():
     def __init__(self):
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
-        chrome_options.add_argument("--headless") 
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--no-sandbox")
-        self.driver = webdriver.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"), chrome_options=chrome_options)
-        self.netmarble = 'https://couponweb.netmarble.com/coupon/ennt/1324' #序號官網
         self.nthchid = {'天鵝' : 'li:nth-child(5)'}
-    def pull_coupon(self, event, game_id, coupon_id):
-        self.driver.get(self.netmarble)
-        time.sleep(2)
-        self.driver.find_element(By.ID, "ip_cunpon2").click()
-        self.driver.find_element(By.ID, "ip_cunpon2").send_keys(game_id)
-        self.driver.find_element(By.CSS_SELECTOR, "#serverList .select_icon").click()
-        self.driver.find_element(By.CSS_SELECTOR, self.nthchid['天鵝']).click()
-        self.driver.find_element(By.ID, "ip_cunpon1").click()
-        self.driver.find_element(By.ID, "ip_cunpon1").send_keys(coupon_id)
-        self.driver.find_element(By.CSS_SELECTOR, "#submitCoupon > p").click()
-        time.sleep(1)
-        self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(2) p").click()
-        time.sleep(1)
+        self.result = {'OK':[],  'Error':[]}
+    def pull_coupon(self, game_id, coupon_id):
         try:
-            TextMsg(event, '開始執行序號領取，結束後通知管理員，期間不受理代領')
-            self.driver.find_element(By.CSS_SELECTOR, ".go_main > p").click()
+            chrome_options = webdriver.ChromeOptions()
+            chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
+            chrome_options.add_argument("--headless") #無頭模式
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--no-sandbox")
+            driver = webdriver.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"), chrome_options=chrome_options)
+            driver.get('https://couponweb.netmarble.com/coupon/ennt/1324')
+            time.sleep(5)
+            driver.find_element(By.ID, "ip_cunpon1").click()
+            driver.find_element(By.ID, "ip_cunpon1").send_keys(coupon_id) #填入序號
+            driver.find_element(By.ID, "ip_cunpon2").click()
+            driver.find_element(By.ID, "ip_cunpon2").send_keys(game_id) #填入帳號
+            driver.find_element(By.CSS_SELECTOR, "#serverList .select_icon").click() #選伺服器
+            time.sleep(5)
+            driver.find_element(By.CSS_SELECTOR, self.nthchid['天鵝']).click()
+            driver.find_element(By.CSS_SELECTOR, "#submitCoupon > p").click()
+            time.sleep(5)
+            driver.find_element(By.CSS_SELECTOR, "li:nth-child(2) p").click() #確認角色
+            time.sleep(5)
+            driver.find_element(By.CSS_SELECTOR, ".go_main > p").click() #確認送出
+            driver.quit()
+            self.result['OK'].append(game_id)
         except:
-            None
-        self.driver.quit()
+            self.result['Error'].append(game_id)
 
 #監聽所有來自 /callback 的 Post Request
 @app.route("/callback", methods=['POST'])
@@ -717,9 +720,12 @@ def reply(event):
         None
 
     if re.search('加入清單', msg):
-        text = 'LINE_UID,LINE_NAME,GAME_NAME,PUSH_MSG\n' 
+        if event.source.user_id not in admin_id:
+           return
+        text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
         for i, j in zip(join_list.keys(), join_list.values()):
-            text += '{uid},{name},0\n'.format(uid= i, name= j)
+            text += '{uid},{name}\n'.format(uid= i, name= j)
+        join_list = {}
         TextMsg(event, text)
         return
 
@@ -735,16 +741,11 @@ def reply(event):
         MultMsg(admin_id, text)
         TextMsg(event, profile_name+ ' 歡迎加入王國名單~')
         return
-        
+
     if re.search('抽獎', msg):
         game_split = msg.split(',')
         redis_model.game_room = redis_model.reply('game_room')
-        if msg == '開始抽獎' :
-            if event.source.user_id not in admin_id:
-               return            
-            MultMsg(push_id, '請輸入查看抽獎～可以開始抽獎囉')
-            return
-        elif game_split[0] == '舉辦抽獎' :
+        if game_split[0] == '舉辦抽獎' :
               room = 'r'
               for i in range(0,6):           
                   room += str(random.randint(0,9))
@@ -811,24 +812,35 @@ def reply(event):
         FlexMsg(event, '排行榜', flex.flex_carousel)
         return
 
-    if re.search('/白白', msg):
+    if re.search('/炎炎', msg):
         chrome = chrome_coupon()
-        id = msg.split(' ')[1]
         game_id = redis_model.reply('coupon_ninokuni')
         if re.search('代領序號', msg):
-            for i in game_id['天鵝'].keys():
-                if id in game_id['天鵝'][i] : 
+            MultMsg(admin_id, '開始執行序號領取，結束後通知管理員，期間不受理代領')
+            for i, j in product(game_id['天鵝'].keys(), msg.split(' ')[1:]):
+                if j in game_id['天鵝'][i] : 
                     continue
                 else:
-                    chrome.pull_coupon(event, i, id)
-                    game_id['天鵝'][i].append(id)
-            MultMsg(admin_id, id + '--------領取完成')
+                    chrome.pull_coupon(i, j)
+                    game_id['天鵝'][i].append(j)
+            redis_model.insert('coupon_ninokuni', game_id)
+            try:
+                TextMsg(event, '領取成功 :\n----------------\n' 
+                    + '\n'.join(chrome.result['OK'])
+                    )
+            except:
+                MultMsg(admin_id, '領取成功 :\n----------------\n' 
+                    + '\n'.join(chrome.result['OK']) 
+                    )
             return
         elif re.search('新增帳號', msg):
-            game_id['天鵝'][id] = []
-            redis_model.insert('coupon_ninokuni', game_id)
+            for i in msg.split(' ')[1:]:
+                game_id['天鵝'][id] = []
+                redis_model.insert('coupon_ninokuni', game_id)
             TextMsg(event, id + '--------新增成功')     
             return
+        TextMsg(event, '任務不明!!')     
+        return 
 
     if re.search('.jpg|快樂', msg):
         part = re.search('.jpg|快樂', msg).group(0)
@@ -849,12 +861,11 @@ def reply(event):
     keyword_dict = redis_model.reply('keyword')
     if re.search('關鍵字', msg):
         key = msg.split(' ')[1].split('=')[0]
-        word = msg.split(' ')[1].split('=')[1]
+        word = msg.split(' ')[1].split('=')[1:]
         if re.search('新增關鍵字', msg):
-            if key in keyword_dict.keys():
-                keyword_dict[key].append(word)
-            else :
-                keyword_dict[key] = [word] 
+            if key not in keyword_dict.keys(): keyword_dict[key] = [] 
+            for i in word:
+                keyword_dict[key].append(i)
             redis_model.insert('keyword', keyword_dict)
             TextMsg(event, key + '--------新增成功')            
         elif re.search('刪除關鍵字', msg):
@@ -869,7 +880,7 @@ def reply(event):
         return
     text_key = re.search('|'.join(keyword_dict.keys()), msg)
     image_key = re.search('|'.join(Keyword_image), msg)
-    if text_key and image_key and random.random() >= 0.65 : text_key = True
+    if text_key and image_key and random.random() > 0.5 : text_key = True
     else : 
         if image_key : text_key = False
     if text_key:
