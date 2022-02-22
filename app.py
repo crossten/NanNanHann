@@ -8,7 +8,6 @@ from linebot.models import (
 from flask import Flask, request, abort
 import redis
 #追加功能相關Package
-from random import shuffle
 from fake_useragent import UserAgent
 import pandas as pd
 import numpy as np
@@ -234,7 +233,7 @@ class Lottery():
             image_link = 'https://i.imgur.com/IoPqQPZ.png'
         game = {
             'type': 'bubble',
-            'size' : 'giga',
+            'size' : 'mega',
             }
         game['header'] = self.base_box('vertical')
         game['header']['contents'].append(self.image_box(image= image_link))
@@ -454,8 +453,8 @@ class carte():
         bub['footer']['width'] = str(exp) + '%'
         bub['footer']['height'] = '16px'
         bub['footer']['backgroundColor'] = '#FF6666'
-        self.flex_carousel['contents'].append(bub)        
-
+        self.flex_carousel['contents'].append(bub)
+        
 #百度搜圖
 def baidu(keyword):
     url = 'https://image.baidu.com/search/acjson?'
@@ -503,9 +502,6 @@ def baidu(keyword):
     return response.text
 
 #抽幻獸介面
-pet_data = pd.concat([pet_data, pet_new])
-pet_data['Total'] = pet_data['Total'].str.replace('%', '').astype('float')/100
-pet_data = pet_data.sort_values(by=['Total']).reset_index(drop=True)
 class game_pet():
     def __init__(self) :
         self.flex_carousel = {'contents':[],'type':'carousel'}
@@ -720,12 +716,9 @@ def reply(event):
         None
 
     if re.search('加入清單', msg):
-        if event.source.user_id not in admin_id:
-           return
-        text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
+        text = 'LINE_UID,LINE_NAME,GAME_NAME,PUSH_MSG\n' 
         for i, j in zip(join_list.keys(), join_list.values()):
-            text += '{uid},{name}\n'.format(uid= i, name= j)
-        join_list = {}
+            text += '{uid},{name},0\n'.format(uid= i, name= j)
         TextMsg(event, text)
         return
 
@@ -741,11 +734,16 @@ def reply(event):
         MultMsg(admin_id, text)
         TextMsg(event, profile_name+ ' 歡迎加入王國名單~')
         return
-
+        
     if re.search('抽獎', msg):
         game_split = msg.split(',')
         redis_model.game_room = redis_model.reply('game_room')
-        if game_split[0] == '舉辦抽獎' :
+        if msg == '開始抽獎' :
+            if event.source.user_id not in admin_id:
+               return            
+            MultMsg(push_id, '請輸入查看抽獎～可以開始抽獎囉')
+            return
+        elif game_split[0] == '舉辦抽獎' :
               room = 'r'
               for i in range(0,6):           
                   room += str(random.randint(0,9))
@@ -812,7 +810,7 @@ def reply(event):
         FlexMsg(event, '排行榜', flex.flex_carousel)
         return
 
-    if re.search('/炎炎', msg):
+    if re.search('/白白', msg):
         chrome = chrome_coupon()
         game_id = redis_model.reply('coupon_ninokuni')
         if re.search('代領序號', msg):
@@ -871,7 +869,8 @@ def reply(event):
         elif re.search('刪除關鍵字', msg):
             if key in keyword_dict.keys():
                 try:
-                    keyword_dict[key].remove(word)
+                    for i in word:
+                        keyword_dict[key].remove(word)
                     if keyword_dict[key] == [] : del keyword_dict[key]
                     redis_model.insert('keyword', keyword_dict)
                     TextMsg(event, key + '--------刪除成功')
@@ -880,7 +879,7 @@ def reply(event):
         return
     text_key = re.search('|'.join(keyword_dict.keys()), msg)
     image_key = re.search('|'.join(Keyword_image), msg)
-    if text_key and image_key and random.random() > 0.5 : text_key = True
+    if text_key and image_key and random.random() >= 0.85 : text_key = True
     else : 
         if image_key : text_key = False
     if text_key:
@@ -911,24 +910,9 @@ def Postback_game(event):
 
     if re.search('抽幻獸', val):
         flex = game_pet()
-        probability = []
-        pet_name = []
-        pet_url = []
-        turn = int(re.findall('抽幻獸(.*?)抽', val)[0])
-        for i in range(0, turn):
-            probability.append(random.random())
-        probability.sort()
-        for num, i in enumerate(pet_data['Total']):
-            for j in probability :
-                if i > j :
-                    pet_name.append(pet_data['Name'][num])
-                    pet_url.append(pet_data['Url'][num])
-                    probability.pop(0)
-                if i <= j : break
-        pick = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9][:turn]
-        shuffle(pick)
+        pick = random.choices(pet_data['Name'], weights = pet_data['Probability'], k = int(re.findall('抽幻獸(.*?)抽', val)[0]))
         for i in pick :
-            flex.flex_carousel['contents'].append(flex.report(player= profile_name, pet_url= pet_url[i], pet_name= pet_name[i] ))
+            flex.flex_carousel['contents'].append(flex.report(player= profile_name, pet_url= pet_dict[i], pet_name= i))
         FlexMsg(event, '抽獎結果', flex.flex_carousel)
         return
 
