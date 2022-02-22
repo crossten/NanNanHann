@@ -12,13 +12,15 @@ from random import shuffle
 from fake_useragent import UserAgent
 import pandas as pd
 import numpy as np
+import time
 import json
 import os
 import re
 import random
 import pyimgur
 import requests
-
+from selenium import webdriver
+from selenium.webdriver.common.by import By
 # 必須放上自己的Channel Access Token、Channel Secret
 channel_access_token = 'channel_access_token'
 channel_secret = 'channel_secret'
@@ -32,6 +34,7 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(channel_access_token)
 handler = WebhookHandler(channel_secret)
 member = pd.read_csv('member.csv', header= 0, index_col= None)
+push_id = member['LINE_UID'][member['PUSH_MSG'] == 1]
 member['GAME_NAME'] = member['GAME_NAME'].fillna(',')+ ','+ member['LINE_NAME'] 
 member['GAME_NAME']  = member['GAME_NAME'].str.split(',', expand=True)[0]
 MsgLog = pd.DataFrame(columns = ['user_id', 'display_name', 'message_id', 'msg'])
@@ -55,6 +58,7 @@ class redis_db():
         self.host = 'redis-cloud.redislabs.com'
         self.port = 'port'
         self.password = 'password'
+        self.password = 'UjZ3ZtLtcv6tLjACzNT0pNP3vlVRuksa'
         self.connect = redis.StrictRedis(
                 host=self.host,
                 port=self.port, 
@@ -450,7 +454,6 @@ class carte():
         bub['footer']['backgroundColor'] = '#FF6666'
         self.flex_carousel['contents'].append(bub)
         
-
 #百度搜圖
 def baidu(keyword):
     url = 'https://image.baidu.com/search/acjson?'
@@ -576,6 +579,36 @@ class game_pet():
         flex['body']['contents'].append(add_box)
         return flex
 
+class chrome_coupon():
+    def __init__(self):
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
+        chrome_options.add_argument("--headless") 
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--no-sandbox")
+        self.driver = webdriver.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"), chrome_options=chrome_options)
+        self.netmarble = 'https://couponweb.netmarble.com/coupon/ennt/1324' #序號官網
+        self.nthchid = {'天鵝' : 'li:nth-child(5)'}
+    def pull_coupon(self, event, game_id, coupon_id):
+        self.driver.get(self.netmarble)
+        time.sleep(2)
+        self.driver.find_element(By.ID, "ip_cunpon2").click()
+        self.driver.find_element(By.ID, "ip_cunpon2").send_keys(game_id)
+        self.driver.find_element(By.CSS_SELECTOR, "#serverList .select_icon").click()
+        self.driver.find_element(By.CSS_SELECTOR, self.nthchid['天鵝']).click()
+        self.driver.find_element(By.ID, "ip_cunpon1").click()
+        self.driver.find_element(By.ID, "ip_cunpon1").send_keys(coupon_id)
+        self.driver.find_element(By.CSS_SELECTOR, "#submitCoupon > p").click()
+        time.sleep(1)
+        self.driver.find_element(By.CSS_SELECTOR, "li:nth-child(2) p").click()
+        time.sleep(1)
+        try:
+            TextMsg(event, '開始執行序號領取，結束後通知管理員，期間不受理代領')
+            self.driver.find_element(By.CSS_SELECTOR, ".go_main > p").click()
+        except:
+            None
+        self.driver.quit()
+
 #監聽所有來自 /callback 的 Post Request
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -684,12 +717,9 @@ def reply(event):
         None
 
     if re.search('加入清單', msg):
-        if event.source.user_id not in admin_id:
-           return
-        text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
+        text = 'LINE_UID,LINE_NAME,GAME_NAME,PUSH_MSG\n' 
         for i, j in zip(join_list.keys(), join_list.values()):
-            text += '{uid},{name}\n'.format(uid= i, name= j)
-        join_list = {}
+            text += '{uid},{name},0\n'.format(uid= i, name= j)
         TextMsg(event, text)
         return
 
@@ -706,28 +736,15 @@ def reply(event):
         TextMsg(event, profile_name+ ' 歡迎加入王國名單~')
         return
         
-    if re.search('清空', msg):
-        if event.source.user_id not in admin_id:
-            return
-        if re.search('清空抽獎紀錄', msg):
-            for elem in redis_model.connect.keys():
-                if elem[0] == 'r' :
-                    redis_model.pop(elem)
-            TextMsg(event, '清空抽獎紀錄完成')
-            return
-        if re.search('清空資料庫', msg):
-            for elem in redis_model.connect.keys():
-                redis_model.pop(elem)
-            redis_model.insert('game_room', [])
-            redis_model.insert('personal', {})
-            redis_model.insert('keyword', {})
-            TextMsg(event, '資料庫清空完成')
-            return
-
     if re.search('抽獎', msg):
         game_split = msg.split(',')
         redis_model.game_room = redis_model.reply('game_room')
-        if game_split[0] == '舉辦抽獎' :
+        if msg == '開始抽獎' :
+            if event.source.user_id not in admin_id:
+               return            
+            MultMsg(push_id, '請輸入查看抽獎～可以開始抽獎囉')
+            return
+        elif game_split[0] == '舉辦抽獎' :
               room = 'r'
               for i in range(0,6):           
                   room += str(random.randint(0,9))
@@ -794,6 +811,25 @@ def reply(event):
         FlexMsg(event, '排行榜', flex.flex_carousel)
         return
 
+    if re.search('/白白', msg):
+        chrome = chrome_coupon()
+        id = msg.split(' ')[1]
+        game_id = redis_model.reply('coupon_ninokuni')
+        if re.search('代領序號', msg):
+            for i in game_id['天鵝'].keys():
+                if id in game_id['天鵝'][i] : 
+                    continue
+                else:
+                    chrome.pull_coupon(event, i, id)
+                    game_id['天鵝'][i].append(id)
+            MultMsg(admin_id, id + '--------領取完成')
+            return
+        elif re.search('新增帳號', msg):
+            game_id['天鵝'][id] = []
+            redis_model.insert('coupon_ninokuni', game_id)
+            TextMsg(event, id + '--------新增成功')     
+            return
+
     if re.search('.jpg|快樂', msg):
         part = re.search('.jpg|快樂', msg).group(0)
         keyword = msg.split(part)[0]
@@ -809,14 +845,6 @@ def reply(event):
         random_img_url = random.choice(image_url)
         ImageMsg(event, random_img_url)
         return
-
-    if re.search('|'.join(Keyword_image), msg):
-        i = re.search('|'.join(Keyword_image), msg).group(0)
-        key = os.listdir(os.path.join('pitchure', i))
-        pick = os.path.join('pitchure',i , random.choice(key))
-        uploaded_image = im.upload_image(pick)
-        ImageMsg(event, uploaded_image.link)
-        return 
 
     keyword_dict = redis_model.reply('keyword')
     if re.search('關鍵字', msg):
@@ -839,12 +867,22 @@ def reply(event):
                 except :
                     TextMsg(event, '刪除失敗\n '+ key +' : '+ keyword_dict[key])
         return
-
-    if re.search('|'.join(keyword_dict.keys()), msg):
+    text_key = re.search('|'.join(keyword_dict.keys()), msg)
+    image_key = re.search('|'.join(Keyword_image), msg)
+    if text_key and image_key and random.random() >= 0.65 : text_key = True
+    else : 
+        if image_key : text_key = False
+    if text_key:
         part = re.search('|'.join(keyword_dict.keys()), msg).group(0)
         TextMsg(event, random.choice(keyword_dict[part]))
         return
-
+    elif image_key:
+        i = re.search('|'.join(Keyword_image), msg).group(0)
+        key = os.listdir(os.path.join('pitchure', i))
+        pick = os.path.join('pitchure',i , random.choice(key))
+        uploaded_image = im.upload_image(pick)
+        ImageMsg(event, uploaded_image.link)
+        return 
 
 @handler.add(PostbackEvent)
 def Postback_game(event):
