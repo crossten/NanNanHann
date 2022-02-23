@@ -26,29 +26,33 @@ from itertools import product
 channel_access_token = 'channel_access_token'
 channel_secret = 'channel_secret'
 #管理員帳號
-admin_id = ['line_uid#1', 'line_uid#2']
-#分享照片
-im = pyimgur.Imgur('Imgur_api') 
+admin_id = ['admin_id']
+#分享照片 Imgur-api
+im = pyimgur.Imgur('Imgur') 
 
 #常用定義/功能
 app = Flask(__name__)
 line_bot_api = LineBotApi(channel_access_token)
 handler = WebhookHandler(channel_secret)
-member = pd.read_csv('member.csv', header= 0, index_col= None)
-push_id = member['LINE_UID'][member['PUSH_MSG'] == 1]
+member = pd.read_csv('data_member.csv', header= 0, index_col= None)
 member['GAME_NAME'] = member['GAME_NAME'].fillna(',')+ ','+ member['LINE_NAME'] 
 member['GAME_NAME']  = member['GAME_NAME'].str.split(',', expand=True)[0]
 MsgLog = pd.DataFrame(columns = ['user_id', 'display_name', 'message_id', 'msg'])
 Keyword_image = os.listdir('pitchure')
+pet_data = pd.read_csv('data_pet.csv', header= 0, index_col= None)
 pet_new = pd.DataFrame(
     data = {
         'Name': '★★★★托奇',
-        'Probability': '0.0333%',
-        'Total': '100%',
+        'Probability': 0.0333,
         'Url': 'https://hedwig-cf.netmarble.com/forum-common/ennt/ennt_t/thumbnail/17ec567cfa314cadb4910ca8be3781bc_1644452443006_d.jpg'
         },
     index=[0])
-pet_data = pd.read_csv('pet.csv', header= 0, index_col= None)
+pet_data = pd.concat([pet_data, pet_new])
+pet_data.set_index('Name', inplace = True)
+skill_list = pd.read_csv('data_skill.csv', header= 0, index_col= None)
+skill_list.set_index('name', inplace = True)
+adjective = pd.read_csv('data_adjective.csv', header= 0, index_col= None)
+star = pd.read_csv('data_star.csv', header= 0, index_col= None)
 join_list = {}
 Unsend_list = {}
 
@@ -56,10 +60,9 @@ Unsend_list = {}
 #redis_db設定 --redis-api
 class redis_db():
     def __init__(self):
-        self.host = 'redis-cloud.redislabs.com'
+        self.host = 'cloud.redislabs.com'
         self.port = 'port'
         self.password = 'password'
-        self.password = 'UjZ3ZtLtcv6tLjACzNT0pNP3vlVRuksa'
         self.connect = redis.StrictRedis(
                 host=self.host,
                 port=self.port, 
@@ -75,7 +78,8 @@ class redis_db():
             'Sticker' : random.randint(3,8),
             'Unsend' : -1 * random.randint(0,5),
             'Image' : random.randint(7,15),
-            'Postback' : 1
+            'Postback' : 1,
+            'Attack' : 1
         }
     def reply(self, KeyName):
         val = self.connect.get(KeyName)
@@ -108,7 +112,7 @@ class redis_db():
             return [event.source.user_id, event.source.group_id]
         except:
             return [event.source.user_id, 'personal']
-    def update(self, event, message_type, is_mention = False, mention_id = ''):
+    def update(self, event, message_type, is_mention = False, mention_id = '', exp= 1):
         self.read_data(event)
         member_id = [mention_id, event.source.group_id] if is_mention else self.refresh(event)
         try:
@@ -116,7 +120,7 @@ class redis_db():
         except:
             self.data[member_id[0]][message_type] = 1
         try:
-            self.data[member_id[0]]['EXP'] += self.magnify[message_type] 
+            self.data[member_id[0]]['EXP'] += self.magnify[message_type] * exp
             if self.data[member_id[0]]['EXP'] < 0 : self.data[member_id[0]]['EXP'] = 0
         except:
             self.data[member_id[0]]['EXP'] = 0
@@ -202,6 +206,7 @@ class Lottery():
             'text': text,
             'weight': 'bold',
             'color': color,
+            'wrap' : True,
             'size': 'sm'
                 }
         return box
@@ -209,6 +214,7 @@ class Lottery():
         box = {
             'type': 'box',
             'layout': 'horizontal',
+            'wrap' : True,
             'backgroundColor': backgroundColor,
             'contents': []
             } 
@@ -220,9 +226,9 @@ class Lottery():
             'style' : 'primary'
             }
         box['action'] = {
-                'type': 'postback',
-                'label': label,
-                'data': data
+            'type': 'postback',
+            'label': label,
+            'data': data
                 }
         return box
     def flex(self, room, award, sizes):
@@ -233,7 +239,7 @@ class Lottery():
             image_link = 'https://i.imgur.com/IoPqQPZ.png'
         game = {
             'type': 'bubble',
-            'size' : 'mega',
+            'size' : 'giga',
             }
         game['header'] = self.base_box('vertical')
         game['header']['contents'].append(self.image_box(image= image_link))
@@ -288,13 +294,14 @@ class game_rank():
             'text': text,
             'weight': 'bold',
             'color': color,
+            'wrap' : True,            
             'size': 'xl'
                 }
         return box
     def rank_box(self, group):
         game = {
             'type': 'bubble',
-            'size' : 'mega',
+            'size' : 'giga',
             }
         game['header'] = self.base_box(layout= 'vertical')
         game['header']['contents'].append(self.text_box(text= self.Msgtype[group] + ' 排行榜', color= '#171717'))
@@ -323,7 +330,6 @@ class game_rank():
             'align': 'center',
             'color': color,
             'size': 'sm',
-            'wrap': True,
             'adjustMode': 'shrink-to-fit'
         }
         return box
@@ -377,6 +383,14 @@ class game_rank():
             add['Counts'] = add['Counts'].astype('str')
             self.flex_carousel['contents'].append(self.rank(i, add))
 
+#遊戲名稱
+def nickname(user_id):
+    try:
+        name = member['GAME_NAME'][member['LINE_UID'] == user_id].iloc[0]
+    except:
+        name = '未加入王國'
+    return name
+
 #名片介面
 class carte():
     def __init__(self):
@@ -391,6 +405,8 @@ class carte():
         }
         self.flex_carousel = {'contents':[],'type':'carousel'}
         self.separator = {'type': 'separator', 'color' : '#E0E0E0'}
+        self.error = False
+        self.hp = 0
     def base_box(self, layout):
         box = {
             'type': 'box',
@@ -411,9 +427,69 @@ class carte():
             'type': 'text',
             'text': text,
             'color' : '#E0E0E0',
+            'wrap' : True,
             'size' : size
                 }
         return box
+    def button(self, label, data):
+        box = {
+            'type': 'button',
+            'style' : 'secondary',
+            'color' : '#B5B5B5',
+            'wrap' : True
+            }
+        box['action'] = {
+            'type': 'postback',
+            'label': label,
+            'data': data
+            }
+        return box
+    def crusade(self, line_uid, user_data, room):
+        member_keys = user_data.keys()
+        bub = {'type': 'bubble', 'size' : 'mega'}
+        if 'EXP' not in member_keys :
+            self.error = True
+            return
+        else : 
+            self.hp = user_data['EXP']
+        bub['body'] = self.base_box(layout = 'vertical')
+        bub['body']['backgroundColor'] = '#3D3D3D'
+        if 'url' in member_keys:
+            bub['body']['contents'].append(self.image_box(image_url = user_data['url']) )
+        else :
+            bub['body']['contents'].append(self.image_box(image_url= 'https://cdn0.popo.tw/uc/61/50365/O.jpg'))
+        user_data['LEVEL'] = 1 + int(user_data['EXP'] / 100)
+        box_vertical = self.base_box(layout = 'vertical')
+        box_vertical['paddingStart'] = 'md'
+        box = self.base_box(layout = 'baseline')
+        text = self.text_box(text = 'Level : ' + str(user_data['LEVEL']), size = 'lg')
+        box['contents'].append(text)
+        box_vertical['contents'].append(box)
+        box_vertical['contents'].append(self.separator)
+        if nickname(line_uid) == '未加入王國' :
+            game_name = user_data['name'] if 'name' in member_keys else '未登入名稱'
+        else :
+            game_name = nickname(line_uid)
+        box = self.base_box(layout = 'baseline')
+        box['spacing'] = 'sm'
+        box['contents'].append(self.text_box(text = game_name, size = 'lg'))
+        box_vertical['contents'].append(box)
+        box = self.base_box(layout = 'baseline')
+        box['spacing'] = 'sm'
+        text = self.text_box(text = '生命值 : {hp}'.format(hp = self.hp), size = 'lg')
+        box['contents'].append(text)
+        box_vertical['contents'].append(box)
+        text = self.text_box(text = '可使用技能', size = 'lg')
+        box_vertical['contents'].append(text)
+        box_vertical['contents'].append(self.separator)
+        skill = random.choices(list(skill_list.index), k = 4)
+        for i in skill:
+            box = self.button(label = i, data = '討伐-{game_name}-{line_uid}-{room}-{skill}'.format(game_name = game_name, line_uid = line_uid, room = room, skill= i))
+            box_vertical['contents'].append(box)
+        bub['body']['contents'].append(box_vertical)
+        self.flex_carousel['contents'].append(bub)        
+        return
+
     def flex(self, line_uid, user_data):
         member_keys = user_data.keys()
         bub = {'type': 'bubble', 'size' : 'giga'}
@@ -432,10 +508,10 @@ class carte():
         box['contents'].append(text)
         box_vertical['contents'].append(box)
         box_vertical['contents'].append(self.separator)
-        try:
-            game_name = member['GAME_NAME'][member['LINE_UID'] == line_uid].iloc[0]
-        except:
+        if nickname(line_uid) == '未加入王國' :
             game_name = user_data['name'] if 'name' in member_keys else '未登入名稱'
+        else :
+            game_name = nickname(line_uid)
         box = self.base_box(layout = 'baseline')
         box['spacing'] = 'sm'
         box['contents'].append(self.text_box(text = game_name, size = 'lg'))
@@ -453,8 +529,8 @@ class carte():
         bub['footer']['width'] = str(exp) + '%'
         bub['footer']['height'] = '16px'
         bub['footer']['backgroundColor'] = '#FF6666'
-        self.flex_carousel['contents'].append(bub)
-        
+        self.flex_carousel['contents'].append(bub)        
+
 #百度搜圖
 def baidu(keyword):
     url = 'https://image.baidu.com/search/acjson?'
@@ -523,11 +599,14 @@ class game_pet():
             }
         return box
     def button(self, label, data):
-        box = {'type': 'button'}
+        box = {
+            'type': 'button',
+            'color' : '#E0E0E0',
+            }
         box['action'] = {
-                'type': 'postback',
-                'label': label,
-                'data': data
+            'type': 'postback',
+            'label': label,
+            'data': data
             }
         return box
     def menu(self):
@@ -589,7 +668,7 @@ class chrome_coupon():
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--no-sandbox")
             driver = webdriver.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"), chrome_options=chrome_options)
-            driver.get('https://couponweb.netmarble.com/coupon/ennt/1324')
+            driver.get('https://couponweb.netmarble.com/coupon/ennt/1324') #官方網址
             time.sleep(5)
             driver.find_element(By.ID, "ip_cunpon1").click()
             driver.find_element(By.ID, "ip_cunpon1").send_keys(coupon_id) #填入序號
@@ -650,10 +729,7 @@ def Unsend_dict(event):
     profile_user = event.source.user_id
     message_id = event.unsend.message_id
     display_name = MsgLog['display_name'][(MsgLog['user_id'] == profile_user) & (MsgLog['message_id'] == message_id)].iloc[-1]
-    try:
-        game_name = member['GAME_NAME'][member['LINE_UID'] == profile_user].iloc[0]
-    except:
-        game_name = '未加入王國'
+    game_name = nickname(profile_user)
     Unsend_msg = MsgLog['msg'][(MsgLog['user_id'] == profile_user) & (MsgLog['message_id'] == message_id)].iloc[-1]
     Unsend_list[message_id] = ["{display}({game})".format(display= display_name,game = game_name), Unsend_msg]
     return 
@@ -690,6 +766,55 @@ def reply(event):
                 FlexMsg(event, '查詢名片', card.flex_carousel)
             except:
                 TextMsg(event, msg.split('@')[1]+ ' 尚未留下任何紀錄')
+        if re.search('討伐', msg):
+            card = carte()
+            line_uid = mention[0].user_id
+            redis_model.game_room = redis_model.reply('game_crusade')
+            room = 'k'
+            for i in range(0,6):           
+                room += str(random.randint(0,9))
+            while room in redis_model.game_room:
+                room += str(random.randint(0,9))
+            redis_model.game_room.append(room)
+            card.crusade(line_uid, redis_model.data[line_uid], room)
+            if card.error :
+                TextMsg(event, msg.split('@')[1]+ ' 尚未留下任何紀錄')
+                return 
+            redis_model.game_key = {
+                        'game_list' : {},
+                        'game_max' : card.hp, 
+                        'game_end' : False
+                        }
+            redis_model.insert('game_crusade', redis_model.game_room)
+            redis_model.insert(room, redis_model.game_key)
+            FlexMsg(event, '討伐' + room, card.flex_carousel)
+            return
+            
+        if re.search('攻擊', msg):
+            try:
+                name_1 = profile_user.display_name
+                play_1 = nickname(event.source.user_id)
+            except:
+                TextMsg(event, '請先+好友~')
+                return                
+            redis_model.data = redis_model.reply(event.source.group_id)
+            attack_1 = redis_model.data[event.source.user_id]['EXP']
+            text = '--------攻擊結果--------\n'
+            for num, i in enumerate(mention) :
+                try:
+                    name_2 = msg.split('@')[num+1]
+                    play_2 = nickname(i.user_id)
+                    attack_2 = redis_model.data[i.user_id]['EXP']
+                    game = random.randint(0, attack_1) - random.randint(0, attack_2)
+                    exp = random.randint(0, int(attack_2 /10)+1) if game > 0 else -1 * random.randint(0, int(attack_1 /10)+1)
+                    redis_model.update(event, 'Attack', exp= exp)
+                    if game > 0 :
+                        text += '{name_1}({play_1}) 攻擊 {name_2}({play_2}) 成功 增加經驗值 {exp}\n'.format(name_1= name_1, play_1= play_1, name_2= name_2, play_2= play_2 ,exp= exp)
+                    else :
+                        text += '{name_1}({play_1}) 攻擊 {name_2}({play_2}) 失敗 經驗值 {exp}\n'.format(name_1= name_1, play_1= play_1, name_2= name_2, play_2= play_2 ,exp= exp)
+                except:
+                    text += '{name_2} 未建立資料，攻擊無效'.format(name_2 = name_2)
+            TextMsg(event, text)
         if re.search('加入王國', msg):
             for i, j in zip(mention, msg.split('@')[1:]) :
                 join_list[i.user_id] = '{name},{game}'.format(name= j.split(' ')[0], game = j.split(' ')[1])
@@ -697,6 +822,7 @@ def reply(event):
             return
     except:
         None
+
     MsgLog = MsgLog.append(
                 {
             'user_id': event.source.user_id, 
@@ -716,9 +842,12 @@ def reply(event):
         None
 
     if re.search('加入清單', msg):
-        text = 'LINE_UID,LINE_NAME,GAME_NAME,PUSH_MSG\n' 
+        if event.source.user_id not in admin_id:
+           return
+        text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
         for i, j in zip(join_list.keys(), join_list.values()):
-            text += '{uid},{name},0\n'.format(uid= i, name= j)
+            text += '{uid},{name}\n'.format(uid= i, name= j)
+        join_list = {}
         TextMsg(event, text)
         return
 
@@ -735,15 +864,35 @@ def reply(event):
         TextMsg(event, profile_name+ ' 歡迎加入王國名單~')
         return
         
+    if re.search('清空', msg):
+        if event.source.user_id not in admin_id:
+            return
+        if re.search('清空抽獎紀錄', msg):
+            for elem in redis_model.connect.keys():
+                if elem[0] == 'r' :
+                    redis_model.pop(elem)
+            TextMsg(event, '清空抽獎紀錄完成')
+            return
+        if re.search('清空討伐紀錄', msg):
+            for elem in redis_model.connect.keys():
+                if elem[0] == 'k' and elem!= 'keyword':
+                    redis_model.pop(elem)
+            TextMsg(event, '清空討伐紀錄')
+            return
+        if re.search('清空資料庫', msg):
+            for elem in redis_model.connect.keys():
+                redis_model.pop(elem)
+            redis_model.insert('game_room', [])
+            redis_model.insert('game_crusade', [])
+            redis_model.insert('personal', {})
+            redis_model.insert('keyword', {})
+            TextMsg(event, '資料庫清空完成')
+            return
+
     if re.search('抽獎', msg):
         game_split = msg.split(',')
         redis_model.game_room = redis_model.reply('game_room')
-        if msg == '開始抽獎' :
-            if event.source.user_id not in admin_id:
-               return            
-            MultMsg(push_id, '請輸入查看抽獎～可以開始抽獎囉')
-            return
-        elif game_split[0] == '舉辦抽獎' :
+        if game_split[0] == '舉辦抽獎' :
               room = 'r'
               for i in range(0,6):           
                   room += str(random.randint(0,9))
@@ -810,17 +959,22 @@ def reply(event):
         FlexMsg(event, '排行榜', flex.flex_carousel)
         return
 
-    if re.search('/白白', msg):
+    if re.search('/炎炎', msg):
         chrome = chrome_coupon()
         game_id = redis_model.reply('coupon_ninokuni')
         if re.search('代領序號', msg):
             MultMsg(admin_id, '開始執行序號領取，結束後通知管理員，期間不受理代領')
+            if game_id['天鵝']['switch'] : 
+                TextMsg(event, '機器人領取序號中......')
+            game_id['天鵝']['switch'] = True
+            redis_model.insert('coupon_ninokuni', game_id)
             for i, j in product(game_id['天鵝'].keys(), msg.split(' ')[1:]):
-                if j in game_id['天鵝'][i] : 
-                    continue
+                if i == 'switch' : continue
+                elif j in game_id['天鵝'][i] : continue
                 else:
                     chrome.pull_coupon(i, j)
                     game_id['天鵝'][i].append(j)
+            game_id['天鵝']['switch'] = False
             redis_model.insert('coupon_ninokuni', game_id)
             try:
                 TextMsg(event, '領取成功 :\n----------------\n' 
@@ -870,7 +1024,7 @@ def reply(event):
             if key in keyword_dict.keys():
                 try:
                     for i in word:
-                        keyword_dict[key].remove(word)
+                        keyword_dict[key].remove(i)
                     if keyword_dict[key] == [] : del keyword_dict[key]
                     redis_model.insert('keyword', keyword_dict)
                     TextMsg(event, key + '--------刪除成功')
@@ -879,7 +1033,7 @@ def reply(event):
         return
     text_key = re.search('|'.join(keyword_dict.keys()), msg)
     image_key = re.search('|'.join(Keyword_image), msg)
-    if text_key and image_key and random.random() >= 0.85 : text_key = True
+    if text_key and image_key and random.random() > 0.5 : text_key = True
     else : 
         if image_key : text_key = False
     if text_key:
@@ -910,11 +1064,71 @@ def Postback_game(event):
 
     if re.search('抽幻獸', val):
         flex = game_pet()
-        pick = random.choices(pet_data['Name'], weights = pet_data['Probability'], k = int(re.findall('抽幻獸(.*?)抽', val)[0]))
+        pick = random.choices(list(pet_data.index), weights = pet_data['Probability'], k = int(re.findall('抽幻獸(.*?)抽', val)[0]))
         for i in pick :
-            flex.flex_carousel['contents'].append(flex.report(player= profile_name, pet_url= pet_dict[i], pet_name= i))
+            flex.flex_carousel['contents'].append(flex.report(player= profile_name, 
+                pet_url= pet_data['Url'][pet_data.index == i][0], pet_name= i))
         FlexMsg(event, '抽獎結果', flex.flex_carousel)
         return
+
+    if re.search('討伐', val) :
+        boss = val.split('-')[1]
+        boss_id = val.split('-')[2]
+        room = val.split('-')[3]
+        skill = val.split('-')[4]
+        redis_model.game_room = redis_model.reply('game_crusade')
+        if room not in redis_model.game_room : return
+        load_game = redis_model.reply(room)
+        if load_game['game_end'] == True : return
+        game_name = profile_name + '({name})'.format(name = nickname(event.source.user_id))
+        if game_name not in load_game['game_list'].keys() :
+            load_game['game_list'][game_name] = 1
+        else : 
+            load_game['game_list'][game_name] += 1
+        accurate = skill_list['accurate'][skill_list.index == skill][0]
+        if nickname(event.source.user_id) == boss and boss != '未登入名稱' and boss != '未加入王國':
+            sidestep = -1
+        else:
+            sidestep = 1 if random.randint(0, 100) < accurate else 0
+        redis_model.data = redis_model.reply(event.source.group_id)
+        attack = random.randint(0, redis_model.data[event.source.user_id]['EXP']) + skill_list['attack'][skill_list.index == skill][0] 
+        attack = attack * sidestep if sidestep == 0 else attack
+        exp = random.randint(0, skill_list['attack'][skill_list.index == skill][0]) * sidestep
+        if sidestep == 1 :
+            redis_model.update(event, 'Attack', exp = exp)
+        else :
+            redis_model.update(event, 'Attack', exp = -1* exp)
+        loss_hp = int(load_game['game_max']) - attack
+        if loss_hp <= 0 :
+            loss_hp = 0
+            boss_exp = -1 * exp * len(load_game['game_list'].keys()) * sidestep
+            boss_message = '成功討伐 {boss} 額外獲得經驗 {exp}'.format(boss= boss, exp= exp) + '\n' \
+                + '{boss} 損失經驗 {exp}'.format(boss = boss, exp = boss_exp) +'\n' \
+                + '------累積攻擊紀錄------\n'  \
+                + str(load_game['game_list'])[1:-1].replace(',','\n')
+            redis_model.update(event, 'Attack', is_mention= True, mention_id= boss_id, exp = boss_exp)
+            load_game['game_end'] = True
+        else :
+            boss_message = '{boss} 剩餘生命 : '.format(boss= boss) + format(loss_hp, ',') + '\n' \
+                + '野生 {boss} 活躍中'.format(boss = boss)
+        obj_end = '碎片' if sidestep == 0 else ''   
+        obj = random.choices(star['Star'], weights= star['Per'])[0]+ random.choice(adjective['list']) +'的'+ boss + obj_end
+        if sidestep == 1:
+            sidestep = '成功' 
+        elif sidestep == -1 :
+            sidestep = '自殘'
+        else :
+            sidestep = '失敗'
+        text = '{game_name} 嘗試使用 {skill} 攻擊 {boss}'.format(game_name= game_name, skill= skill, boss= boss) +'\n' \
+            + '命中判斷 : ' + sidestep + '\n' \
+            + '造成傷害 : ' + format(attack, ',')  + '\n' \
+            + '獲得經驗 : ' + format(exp, ',') + '\n' \
+            + '獲得道具 : ' + obj + '\n' \
+            + '------------------\n'  \
+            + boss_message
+        load_game['game_max'] = str(loss_hp)
+        redis_model.insert(room, load_game)
+        TextMsg(event, text)
 
     if re.search('抽獎編號', val):
         ordr = val.split('-')[1]
@@ -931,10 +1145,7 @@ def Postback_game(event):
                 + game_list
             TextMsg(event, text)
             return
-        try:
-            game_name = member['GAME_NAME'][member['LINE_UID'] == event.source.user_id].iloc[0]
-        except:
-            TextMsg(event, '尚未加入王國名單，請手動輸入抽獎編號參加抽獎')
+        game_name = nickname(event.source.user_id)
         if ordr == '參加':
             load_game['game_list'][event.source.user_id] = game_name
             redis_model.insert(room, load_game)
@@ -979,3 +1190,11 @@ def Postback_game(event):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+© 2022 GitHub, Inc.
+Terms
+Privacy
+Security
+Status
+Docs
+Contact GitHub
+Pricing
