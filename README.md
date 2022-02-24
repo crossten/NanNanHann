@@ -11,9 +11,6 @@
 
 
     heroku : 部屬平台 (https://id.heroku.com/login) or ngrok (https://ngrok.com/)
-    
-    
-    技能表參考 : 神奇寶貝百科招式列表 (https://wiki.52poke.com/zh-hant/%E6%8B%9B%E5%BC%8F%E5%88%97%E8%A1%A8)
 
 
 #手動更新文件
@@ -67,24 +64,9 @@
 
 
     .jpg or 快樂
-    
-    
-    新增關鍵字 xxxx=yyyy=zzzz (關鍵字 = xxxx)
-    
-    
-    攻擊@xxxx @xxxx (發動攻擊!!)
-    
-    
-    討伐@xxxx (發動討伐!!)
-    
-    
-    /白白代領序號 xxxx
-    
-    
-    /白白新增帳號 遊戲帳號 (天鵝限定)
 
 
-  --抽獎相關指令
+--抽獎相關指令
 
 
     舉辦抽獎,活動道具,數量
