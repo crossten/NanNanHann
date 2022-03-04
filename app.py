@@ -12,6 +12,12 @@ import _staticdata #資料來源
 import _nickname #轉換遊戲名稱
 import _line_message #常用line-api功能簡化
 import _redis #redis cloud操作
+redis_model = _redis.redis_db()
+redis_model.insert('Keyword', {})
+redis_model.insert('coupon_ninokuni', {'天鵝': {'switch': False}})
+redis_model.insert('game_crusade', [])
+redis_model.insert('game_room', [])
+
 from self_package import (
     game_lottery, game_rank, game_carte, game_crusade, game_kingdom, game_attack, crawler, crawler_selenium, game_pet, game_wolf
     )
