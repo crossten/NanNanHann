@@ -473,11 +473,11 @@ def Postback_game(event):
 #按鍵:點名
     if re.search('點名', key) :
         if event.source.user_id not in admin_id:
-            message_action.TextMsg(event, '你不是白白老師~無法使用點名功能~')
+            message_action.TextMsg(event, '你不是鳥鳥老師~無法使用點名功能~')
         try:
             line_uid, game_name = key.split('-')[1:]
-            message_action.PushMsg(line_uid, '白白老師點名中~~點到請舉手~~{game_name}'.format(game_name = game_name))
-            message_action.TextMsg(event, '白白老師點名中~')
+            message_action.PushMsg(line_uid, '鳥鳥老師點名中~~點到請舉手~~{game_name}'.format(game_name = game_name))
+            message_action.TextMsg(event, '鳥鳥老師點名中~')
         except:
             message_action.TextMsg(event, '本月額度已使用完畢無法推播~')
 
