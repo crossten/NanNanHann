@@ -241,7 +241,7 @@ def reply(event):
 
 #指令:加入王國相關
     if re.search('加入清單', msg):
-        if event.source.user_id not in admin_id:
+        if event.source.user_id not in admin_id and admin_id != []:
            return
         text = 'LINE_UID,LINE_NAME,GAME_NAME\n' 
         for i, j in zip(join_list.keys(), join_list.values()):
