@@ -5,10 +5,10 @@ def line_secret():
     return 'line_secret'
 
 def admin():
-    return ['admin']
+    return []
 
 def imgur():
-    return 'imgur'
+    return 'imgur api client ID'
 
 def redis(dict):
     data = {
