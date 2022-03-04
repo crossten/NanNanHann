@@ -12,7 +12,7 @@ def imgur():
 
 def redis(dict):
     data = {
-        'host' : 'host',
+        'host' : 'redis-xxx.cloud.redislabs.com',
         'port' : 'port',
         'password' : 'password'
     }

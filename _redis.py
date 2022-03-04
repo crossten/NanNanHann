@@ -26,7 +26,8 @@ class redis_db():
             'Unsend' : -1 * random.randint(0,5),
             'Image' : random.randint(7,15),
             'Postback' : 1,
-            'Attack' : 1
+            'Attack' : 1,
+            'Dead' : 0
         }
     def reply(self, KeyName):
         val = self.connect.get(KeyName)

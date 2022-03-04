@@ -8,7 +8,8 @@ class flex_simulator():
             'Sticker' : '貼圖王',
             'Unsend' : '訊息回收車',
             'Image' : '圖片老司機',
-            'Postback' : '狂點按鈕'
+            'Postback' : '狂點按鈕',
+            'Dead' : '死亡數'
         }
         self.image = {
             'EXP' : 'https://tv-english.club/wp-content/uploads/2014/11/Level-Up_500px.jpg',
@@ -17,7 +18,8 @@ class flex_simulator():
             'Sticker' : 'https://pic.52112.com/180623/JPG-180623A_368/glj9rVcoRS_small.jpg',
             'Unsend' : 'https://img.ltn.com.tw/Upload/news/600/2019/03/14/2726930_1.jpg',
             'Image' : 'https://i.imgur.com/aYYAzNm.png',
-            'Postback' : 'https://img.sj3c.com.tw/uploads/2018/03/KEY-1-2-min.jpg'
+            'Postback' : 'https://img.sj3c.com.tw/uploads/2018/03/KEY-1-2-min.jpg',
+            'Dead' : 'https://img.technews.tw/wp-content/uploads/2019/10/30174225/grave-674443_960_720-624x416.jpg'
         }
         self.flex_carousel = {'contents':[],'type':'carousel'}
     def base_box(self, layout):

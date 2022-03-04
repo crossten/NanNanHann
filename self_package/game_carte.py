@@ -13,6 +13,7 @@ class flex_simulator():
             'Unsend' : '回收訊息次數',
             'Image' : '圖片次數',
             'Postback' : '按鈕點擊次數',
+            'Dead' : '死亡數',
             'EXP' : '經驗值'
         }
         self.flex_carousel = {'contents':[],'type':'carousel'}
